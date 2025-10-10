@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My VRChat Avatar Log</title>
+    <title>Your VRChat Avatar Log</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦊</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -68,7 +69,7 @@
     <div id="app-container">
         <div class="container mx-auto p-4 md:p-8">
             <header class="text-center mb-8 relative">
-                <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">Your VRChat Avatar Log 🦊</h1>
+                <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">🐰 Your VRChat Avatar Log 🦊</h1>
                 <p class="text-lg text-gray-400">Your personal database of discovered avatars.</p>
             </header>
 
@@ -237,7 +238,7 @@
                     <p class="text-xs text-gray-400 font-mono mb-3 break-all">${avatar.avatarId}</p>
                     <p class="text-gray-300 text-sm mb-4 flex-grow">${avatar.notes || 'No notes.'}</p>
                     <div class="mt-auto flex justify-end gap-2">
-                        <button class="select-btn btn-primary text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${avatar.id}" title="Select this avatar in VRChat">Select</button>
+                        <button class="show-btn btn-primary text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${avatar.avatarId}" title="Show this avatar on VRChat.com">Show</button>
                         <button class="edit-btn btn-secondary text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${avatar.id}">Edit</button>
                         <button class="delete-btn btn-danger text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${avatar.id}">Delete</button>
                     </div>
@@ -257,9 +258,15 @@
                     deleteAvatar(avatar.id);
                 };
                 
-                const handleSelect = (e) => {
+                const handleShow = (e) => {
                     e.stopPropagation();
-                    selectAvatar(avatar.avatarId);
+                    const avatarId = e.currentTarget.dataset.id;
+                    if (avatarId && avatarId.trim().startsWith('avtr_')) {
+                        const url = `https://vrchat.com/home/avatar/${avatarId.trim()}`;
+                        window.open(url, '_blank');
+                    } else {
+                        showNotification("This avatar doesn't have a valid ID to show.", 4000, true);
+                    }
                 }
 
                 // Make the whole card clickable to open in VRCX
@@ -275,8 +282,8 @@
                     }
                 });
 
-                 // Event listeners for select, edit and delete buttons
-                card.querySelector('.select-btn').addEventListener('click', handleSelect);
+                 // Event listeners for show, edit and delete buttons
+                card.querySelector('.show-btn').addEventListener('click', handleShow);
                 card.querySelector('.edit-btn').addEventListener('click', openEdit);
                 card.querySelector('.delete-btn').addEventListener('click', handleDelete);
             });
@@ -317,17 +324,6 @@
                 notification.classList.add('hidden');
             }, duration);
         };
-        
-        // --- Select Avatar (Placeholder) ---
-        const selectAvatar = (avatarId) => {
-            if (!avatarId || !avatarId.startsWith('avtr_')) {
-                showNotification("This avatar doesn't have a valid ID to select.", 4000, true);
-                return;
-            }
-            console.log(`Attempting to select avatar: ${avatarId}`);
-            showNotification('Feature unavailable: Secure VRChat API authentication is required to change avatars, which cannot be done from this simple page.', 8000);
-        };
-
 
         // --- Look Up Avatar ID ---
         const handleLookup = (idFieldId) => {
