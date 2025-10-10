@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My VRChat Avatar Log</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #2c2a4a; /* Dark Violet */
+            color: #e6e6fa; /* Lavender White */
+        }
+        .card {
+            background-color: #4f4c7a; /* Muted Violet */
+            border: 1px solid #7f7fd5; /* Brighter Violet */
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        .btn-primary {
+            background-color: #7f7fd5; /* Brighter Violet */
+            color: #1e1e2f;
+            transition: background-color 0.3s;
+        }
+        .btn-primary:hover {
+            background-color: #6a6ad1;
+        }
+        .btn-danger {
+            background-color: #c73866; /* Magenta */
+            transition: background-color 0.3s;
+        }
+        .btn-danger:hover {
+            background-color: #b3315a;
+        }
+        .btn-secondary {
+            background-color: #6b6d85; /* Greyish Violet */
+            transition: background-color: 0.3s;
+        }
+        .btn-secondary:hover {
+             background-color: #5a5c72;
+        }
+        input, textarea {
+            background-color: #4f4c7a; /* Muted Violet */
+            border: 1px solid #7f7fd5; /* Brighter Violet */
+            color: #e6e6fa;
+        }
+        input::placeholder, textarea::placeholder {
+            color: #b0b0d0;
+        }
+        .modal-backdrop {
+            background-color: rgba(0,0,0,0.7);
+        }
+        .modal-content {
+            background-color: #2c2a4a; /* Dark Violet */
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <!-- Notification Element -->
+    <div id="notification" class="fixed top-5 right-5 bg-green-500 text-white p-4 rounded-lg shadow-lg z-50 hidden transition-opacity duration-300 max-w-sm">
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app-container">
+        <div class="container mx-auto p-4 md:p-8">
+            <header class="text-center mb-8 relative">
+                <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">Your VRChat Avatar Log 🦊</h1>
+                <p class="text-lg text-gray-400">Your personal database of discovered avatars.</p>
+            </header>
+
+            <div class="card rounded-lg p-6 mb-8 max-w-2xl mx-auto shadow-lg">
+                <h2 class="text-2xl font-semibold mb-4 text-white">Add New Avatar</h2>
+                <form id="add-avatar-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="md:col-span-2">
+                        <label for="avatarName" class="block mb-2 text-sm font-medium">Avatar Name</label>
+                        <input type="text" id="avatarName" placeholder="e.g., Cyberpunk Fox" class="w-full rounded-md p-2" required>
+                    </div>
+                    <div>
+                        <label for="avatarId" class="block mb-2 text-sm font-medium">Avatar ID</label>
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="avatarId" placeholder="avtr_..." class="w-full rounded-md p-2" required>
+                            <button type="button" id="lookupAvatarBtn" class="btn-secondary text-white font-bold p-2 rounded-md h-full" title="Look up Avatar ID">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="creatorName" class="block mb-2 text-sm font-medium">Creator Name</label>
+                        <input type="text" id="creatorName" placeholder="e.g., Rexouium" class="w-full rounded-md p-2">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="imageUrl" class="block mb-2 text-sm font-medium">Image URL</label>
+                        <input type="url" id="imageUrl" placeholder="https://..." class="w-full rounded-md p-2">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="notes" class="block mb-2 text-sm font-medium">Notes</label>
+                        <textarea id="notes" rows="3" placeholder="Quest compatible, cool shaders, etc." class="w-full rounded-md p-2"></textarea>
+                    </div>
+                    <div class="md:col-span-2 text-right">
+                        <button type="submit" class="btn-primary text-white font-bold py-2 px-4 rounded-md shadow-md">
+                            Add Avatar
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="mb-8 max-w-4xl mx-auto">
+                 <label for="searchBar" class="block mb-2 text-sm font-medium text-gray-300">Search Avatars</label>
+                <input type="search" id="searchBar" placeholder="Search by name, creator, or ID..." class="w-full rounded-md p-3 bg-[#4f4c7a] border border-[#7f7fd5] text-white placeholder-gray-400 focus:ring-2 focus:ring-[#a855f7] focus:outline-none transition">
+            </div>
+
+            <div id="avatar-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Avatar cards will be inserted here -->
+            </div>
+        </div>
+
+        <!-- Edit Modal -->
+        <div id="edit-modal" class="fixed inset-0 z-50 items-center justify-center hidden flex modal-backdrop">
+            <div class="modal-content rounded-lg p-6 shadow-xl w-full max-w-2xl">
+                <h2 class="text-2xl font-semibold mb-4 text-white">Edit Avatar</h2>
+                <form id="edit-avatar-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <input type="hidden" id="editAvatarIdInput">
+                    <div class="md:col-span-2">
+                        <label for="editAvatarName" class="block mb-2 text-sm font-medium">Avatar Name</label>
+                        <input type="text" id="editAvatarName" class="w-full rounded-md p-2" required>
+                    </div>
+                    <div>
+                        <label for="editAvatarId" class="block mb-2 text-sm font-medium">Avatar ID</label>
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="editAvatarId" class="w-full rounded-md p-2" required>
+                            <button type="button" id="lookupEditAvatarBtn" class="btn-secondary text-white font-bold p-2 rounded-md h-full" title="Look up Avatar ID">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="editCreatorName" class="block mb-2 text-sm font-medium">Creator Name</label>
+                        <input type="text" id="editCreatorName" class="w-full rounded-md p-2">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="editImageUrl" class="block mb-2 text-sm font-medium">Image URL</label>
+                        <input type="url" id="editImageUrl" class="w-full rounded-md p-2">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label for="editNotes" class="block mb-2 text-sm font-medium">Notes</label>
+                        <textarea id="editNotes" rows="3" class="w-full rounded-md p-2"></textarea>
+                    </div>
+                    <div class="md:col-span-2 flex justify-end gap-4">
+                        <button type="button" id="cancel-edit" class="btn-secondary text-white font-bold py-2 px-4 rounded-md">Cancel</button>
+                        <button type="submit" class="btn-primary text-white font-bold py-2 px-4 rounded-md">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- DOM Elements ---
+        const avatarList = document.getElementById('avatar-list');
+        const addAvatarForm = document.getElementById('add-avatar-form');
+        const editModal = document.getElementById('edit-modal');
+        const editAvatarForm = document.getElementById('edit-avatar-form');
+        const cancelEditBtn = document.getElementById('cancel-edit');
+        const searchBar = document.getElementById('searchBar');
+        const lookupAvatarBtn = document.getElementById('lookupAvatarBtn');
+        const lookupEditAvatarBtn = document.getElementById('lookupEditAvatarBtn');
+        
+        // --- Storage Configuration ---
+        const STORAGE_KEY = 'vrchatAvatarLog';
+        const OLD_COOKIE_NAME = 'vrchatAvatarLog'; // For one-time migration
+
+        // --- Local Storage Functions ---
+        const getAvatarsFromStorage = () => {
+            const storageValue = localStorage.getItem(STORAGE_KEY);
+            if (storageValue) {
+                try {
+                    return JSON.parse(storageValue);
+                } catch (e) {
+                    console.error("Error parsing avatars from local storage:", e);
+                    return [];
+                }
+            }
+            return [];
+        };
+
+        const saveAvatarsToStorage = (avatars) => {
+            try {
+                const jsonValue = JSON.stringify(avatars);
+                localStorage.setItem(STORAGE_KEY, jsonValue);
+            } catch (error) {
+                console.error("Error saving to localStorage:", error);
+                showNotification("Could not save avatars. Storage might be full.", 6000, true);
+            }
+        };
+        
+        // --- Legacy Cookie Function (for migration) ---
+        const getAvatarsFromCookie_forMigration = () => {
+            const cookieValue = document.cookie
+                .split('; ')
+                .find(row => row.startsWith(`${OLD_COOKIE_NAME}=`));
+
+            if (cookieValue) {
+                try {
+                    return JSON.parse(decodeURIComponent(cookieValue.split('=')[1]));
+                } catch (e) {
+                    console.error("Error parsing avatars from cookie:", e);
+                    return [];
+                }
+            }
+            return [];
+        };
+
+
+        // --- Render Avatars ---
+        const renderAvatars = (avatars) => {
+            avatarList.innerHTML = '';
+            if (avatars.length === 0) {
+                avatarList.innerHTML = `<div class="col-span-full text-center text-gray-400 py-10"><p>No avatars logged yet. Add one using the form above!</p></div>`;
+                return;
+            }
+            avatars.forEach(avatar => {
+                const card = document.createElement('div');
+                // Added cursor-pointer to indicate the card is clickable
+                card.className = 'card rounded-lg p-4 flex flex-col shadow-lg cursor-pointer';
+                card.innerHTML = `
+                    <img src="${avatar.imageUrl || 'https://placehold.co/600x400/162447/e0e0e0?text=No+Image'}" 
+                         alt="${avatar.avatarName}" 
+                         onerror="this.onerror=null;this.src='https://placehold.co/600x400/162447/e0e0e0?text=Invalid+Image';"
+                         class="w-full h-48 object-cover rounded-md mb-4">
+                    <h3 class="text-xl font-bold text-white">${avatar.avatarName}</h3>
+                    <p class="text-sm text-gray-300 mb-1">by ${avatar.creatorName || 'Unknown'}</p>
+                    <p class="text-xs text-gray-400 font-mono mb-3 break-all">${avatar.avatarId}</p>
+                    <p class="text-gray-300 text-sm mb-4 flex-grow">${avatar.notes || 'No notes.'}</p>
+                    <div class="mt-auto flex justify-end gap-2">
+                        <button class="select-btn btn-primary text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${avatar.id}" title="Select this avatar in VRChat">Select</button>
+                        <button class="edit-btn btn-secondary text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${avatar.id}">Edit</button>
+                        <button class="delete-btn btn-danger text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${avatar.id}">Delete</button>
+                    </div>
+                `;
+                avatarList.appendChild(card);
+
+                const openEdit = (e) => {
+                    e.stopPropagation(); // Prevent card click from firing
+                    const fullAvatar = getAvatarsFromStorage().find(a => a.id === avatar.id);
+                    if (fullAvatar) {
+                        openEditModal(fullAvatar);
+                    }
+                };
+
+                const handleDelete = (e) => {
+                    e.stopPropagation();
+                    deleteAvatar(avatar.id);
+                };
+                
+                const handleSelect = (e) => {
+                    e.stopPropagation();
+                    selectAvatar(avatar.avatarId);
+                }
+
+                // Make the whole card clickable to open in VRCX
+                card.addEventListener('click', (e) => {
+                    // If a button inside the card is clicked, let its own event handler work
+                    if (e.target.closest('button')) {
+                        return;
+                    }
+                    // Otherwise, open the VRCX link
+                    if (avatar.avatarId && avatar.avatarId.trim().startsWith('avtr_')) {
+                        const url = `vrcx://switchavatar/${avatar.avatarId.trim()}`;
+                        window.location.href = url;
+                    }
+                });
+
+                 // Event listeners for select, edit and delete buttons
+                card.querySelector('.select-btn').addEventListener('click', handleSelect);
+                card.querySelector('.edit-btn').addEventListener('click', openEdit);
+                card.querySelector('.delete-btn').addEventListener('click', handleDelete);
+            });
+        };
+
+        // --- Search/Filter Avatars ---
+        const filterAvatars = () => {
+            const searchTerm = searchBar.value.toLowerCase();
+            const allAvatars = getAvatarsFromStorage();
+            
+            if (!searchTerm) {
+                renderAvatars(allAvatars);
+                return;
+            }
+
+            const filteredAvatars = allAvatars.filter(avatar => {
+                const nameMatch = avatar.avatarName.toLowerCase().includes(searchTerm);
+                const creatorMatch = (avatar.creatorName || '').toLowerCase().includes(searchTerm);
+                const idMatch = avatar.avatarId.toLowerCase().includes(searchTerm);
+                return nameMatch || creatorMatch || idMatch;
+            });
+
+            renderAvatars(filteredAvatars);
+        };
+
+        searchBar.addEventListener('input', filterAvatars);
+
+        // --- Notification ---
+        const showNotification = (message, duration = 5000, isError = false) => {
+            const notification = document.getElementById('notification');
+            if (!notification) return;
+            
+            notification.textContent = message;
+            notification.classList.remove('hidden', 'bg-red-600', 'bg-green-500');
+            notification.classList.add(isError ? 'bg-red-600' : 'bg-green-500');
+
+            setTimeout(() => {
+                notification.classList.add('hidden');
+            }, duration);
+        };
+        
+        // --- Select Avatar (Placeholder) ---
+        const selectAvatar = (avatarId) => {
+            if (!avatarId || !avatarId.startsWith('avtr_')) {
+                showNotification("This avatar doesn't have a valid ID to select.", 4000, true);
+                return;
+            }
+            console.log(`Attempting to select avatar: ${avatarId}`);
+            showNotification('Feature unavailable: Secure VRChat API authentication is required to change avatars, which cannot be done from this simple page.', 8000);
+        };
+
+
+        // --- Look Up Avatar ID ---
+        const handleLookup = (idFieldId) => {
+            const avatarId = document.getElementById(idFieldId).value;
+            if (avatarId && avatarId.trim().startsWith('avtr_')) {
+                const url = `https://vrchat.com/home/avatar/${avatarId.trim()}`;
+                window.open(url, '_blank');
+            } else {
+                showNotification('Please enter a valid Avatar ID (starting with "avtr_") before looking up.', 5000, true);
+            }
+        };
+
+        lookupAvatarBtn.addEventListener('click', () => handleLookup('avatarId'));
+        lookupEditAvatarBtn.addEventListener('click', () => handleLookup('editAvatarId'));
+
+
+        // --- Add Avatar ---
+        addAvatarForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const avatars = getAvatarsFromStorage();
+            const newAvatar = {
+                id: crypto.randomUUID(),
+                avatarName: addAvatarForm.avatarName.value,
+                avatarId: addAvatarForm.avatarId.value,
+                creatorName: addAvatarForm.creatorName.value,
+                imageUrl: addAvatarForm.imageUrl.value,
+                notes: addAvatarForm.notes.value,
+            };
+            avatars.push(newAvatar);
+            saveAvatarsToStorage(avatars);
+            // After adding, clear search and re-render all avatars
+            searchBar.value = '';
+            filterAvatars();
+            addAvatarForm.reset();
+        });
+
+        // --- Delete Avatar ---
+        const deleteAvatar = (id) => {
+            let avatars = getAvatarsFromStorage();
+            avatars = avatars.filter(avatar => avatar.id !== id);
+            saveAvatarsToStorage(avatars);
+            // After deleting, re-apply the current filter
+            filterAvatars();
+        };
+
+        // --- Edit Avatar ---
+        const openEditModal = (avatar) => {
+            editAvatarForm.editAvatarIdInput.value = avatar.id;
+            editAvatarForm.editAvatarName.value = avatar.avatarName;
+            editAvatarForm.editAvatarId.value = avatar.avatarId;
+            editAvatarForm.editCreatorName.value = avatar.creatorName;
+            editAvatarForm.editImageUrl.value = avatar.imageUrl;
+            editAvatarForm.editNotes.value = avatar.notes;
+            editModal.classList.remove('hidden');
+            editModal.classList.add('flex');
+        };
+
+        const closeEditModal = () => {
+            editModal.classList.add('hidden');
+            editModal.classList.remove('flex');
+        }
+
+        cancelEditBtn.addEventListener('click', closeEditModal);
+
+        editAvatarForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = editAvatarForm.editAvatarIdInput.value;
+            let avatars = getAvatarsFromStorage();
+            
+            const avatarIndex = avatars.findIndex(avatar => avatar.id === id);
+            if (avatarIndex > -1) {
+                avatars[avatarIndex] = {
+                    id: id,
+                    avatarName: editAvatarForm.editAvatarName.value,
+                    avatarId: editAvatarForm.editAvatarId.value,
+                    creatorName: editAvatarForm.editCreatorName.value,
+                    imageUrl: editAvatarForm.editImageUrl.value,
+                    notes: editAvatarForm.editNotes.value,
+                };
+                saveAvatarsToStorage(avatars);
+                // After editing, re-apply the current filter
+                filterAvatars();
+            }
+            closeEditModal();
+        });
+
+        // Initialize the application on window load
+        window.onload = () => {
+            // --- One-time Migration from Cookie to Local Storage ---
+            const avatarsInStorage = localStorage.getItem(STORAGE_KEY);
+            // Only run migration if local storage is empty, to avoid overwriting newer data
+            if (!avatarsInStorage) { 
+                const avatarsInCookie = getAvatarsFromCookie_forMigration();
+                if (avatarsInCookie && avatarsInCookie.length > 0) {
+                    console.log("Migrating avatar data from cookie to local storage.");
+                    saveAvatarsToStorage(avatarsInCookie);
+                    showNotification("Your avatar log has been upgraded to a more reliable storage format!", 7000);
+                }
+            }
+            
+            const avatars = getAvatarsFromStorage(); // Load from new, reliable storage
+            renderAvatars(avatars);
+        };
+
+    </script>
+</body>
+</html>
+
