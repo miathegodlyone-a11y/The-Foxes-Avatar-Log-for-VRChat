@@ -288,6 +288,10 @@
                     <button id="mass-move-btn" class="btn-primary text-white font-bold py-2 px-3 rounded-md shadow-md text-sm">Move</button>
                 </div>
                 <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-2 text-gray-300 text-sm">
+                        <input id="mass-select-all" type="checkbox" class="mass-edit-checkbox" style="display: inline-block; width: 1rem; height: 1rem;">
+                        <span>Select All</span>
+                    </label>
                     <button id="mass-export-btn" class="btn-primary text-white font-bold py-2 px-3 rounded-md shadow-md text-sm">Export Selected</button>
                     <button id="mass-delete-btn" class="btn-danger text-white font-bold py-2 px-3 rounded-md shadow-md text-sm">Delete Selected</button>
                     <button id="cancel-mass-edit-btn" class="btn-secondary text-white font-bold py-2 px-3 rounded-md shadow-md text-sm">Done</button>
@@ -321,6 +325,7 @@
         const massDeleteBtn = document.getElementById('mass-delete-btn');
         const cancelMassEditBtn = document.getElementById('cancel-mass-edit-btn');
         const massExportBtn = document.getElementById('mass-export-btn'); // New Export Button
+        const massSelectAll = document.getElementById('mass-select-all');
         const exportAllBtn = document.getElementById('export-all-btn');
         const importAllBtn = document.getElementById('import-all-btn');
         const importFileInput = document.getElementById('import-file-input');
@@ -665,7 +670,12 @@
                      alt="${escapeHTML(avatar.avatarName)}" 
                      onerror="this.onerror=null;this.src='https://placehold.co/600x400/162447/e0e0e0?text=Invalid+Image';"
                      class="w-full h-48 object-cover rounded-md mb-4">
-                <h3 class="text-xl font-bold text-white">${escapeHTML(avatar.avatarName)}</h3>
+                <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                    <span>${escapeHTML(avatar.avatarName)}</span>
+                    <span class="text-xs font-semibold text-gray-200 bg-purple-700/40 px-2 py-0.5 rounded">
+                        [${avatar.isPC && avatar.isQuest ? 'P/Q' : (avatar.isPC ? 'P' : (avatar.isQuest ? 'Q' : ''))}]
+                    </span>
+                </h3>
                 <p class="text-sm text-gray-300 mb-1">by ${escapeHTML(avatar.creatorName || 'Unknown')}</p>
                 <p class="text-xs text-gray-400 font-mono mb-3 break-all">${escapeHTML(avatar.avatarId)}</p>
                 
@@ -1019,6 +1029,21 @@
             const checkboxes = document.querySelectorAll('.mass-edit-checkbox:checked');
             return Array.from(checkboxes).map(cb => cb.dataset.id);
         };
+
+        // --- Mass Select All ---
+        const setAllMassSelection = (checked) => {
+            const checkboxes = document.querySelectorAll('.mass-edit-checkbox');
+            checkboxes.forEach(cb => {
+                if (cb && cb.dataset && 'id' in cb.dataset) {
+                    cb.checked = checked;
+                }
+            });
+        };
+        if (massSelectAll) {
+            massSelectAll.addEventListener('change', (e) => {
+                setAllMassSelection(e.target.checked);
+            });
+        }
 
         massDeleteBtn.addEventListener('click', () => {
             const idsToDelete = getSelectedAvatarIds();
