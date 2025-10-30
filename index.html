@@ -367,6 +367,135 @@
             return needsQuoting ? `"${escaped}"` : escaped;
         };
 
+        // --- Legacy Import Utilities ---
+        const tryParseJson = (text) => {
+            try {
+                return JSON.parse(text);
+            } catch {
+                return null;
+            }
+        };
+        const looksLikeAvatar = (obj) => obj && (typeof obj === 'object') && (obj.avatarId || obj.avatarName);
+        const looksLikeAvatarArray = (val) => Array.isArray(val) && val.some(looksLikeAvatar);
+        const looksLikePayload = (val) => val && typeof val === 'object' && (Array.isArray(val.avatars) || Array.isArray(val.folders));
+        const normalizeFolders = (folders) => {
+            if (!Array.isArray(folders)) return [];
+            return folders
+                .filter(f => f && (f.id || f.name))
+                .map(f => ({ id: ensureString(f.id) || crypto.randomUUID(), name: ensureString(f.name || 'Folder') }));
+        };
+        const normalizeAvatars = (avatars, validFolderIds = new Set()) => {
+            if (!Array.isArray(avatars)) return [];
+            return avatars
+                .filter(looksLikeAvatar)
+                .map(a => ({
+                    id: ensureString(a.id) || crypto.randomUUID(),
+                    avatarName: ensureString(a.avatarName || 'Unnamed'),
+                    avatarId: ensureString(a.avatarId || ''),
+                    creatorName: ensureString(a.creatorName || a.author || ''),
+                    imageUrl: ensureString(a.imageUrl || a.thumbnail || ''),
+                    isPC: !!(a.isPC !== undefined ? a.isPC : true),
+                    isQuest: !!(a.isQuest !== undefined ? a.isQuest : false),
+                    notes: ensureString(a.notes || ''),
+                    folderId: (a.folderId === null || a.folderId === undefined) ? null : (validFolderIds.has(a.folderId) ? a.folderId : null)
+                }));
+        };
+        const dedupeAvatars = (existing, incoming) => {
+            const byKey = new Map();
+            const keyOf = (a) => (a.avatarId && a.avatarId.startsWith('avtr_')) ? `id:${a.avatarId}` : `name:${a.avatarName.toLowerCase()}|by:${(a.creatorName||'').toLowerCase()}`;
+            existing.forEach(a => byKey.set(keyOf(a), a));
+            incoming.forEach(a => {
+                const key = keyOf(a);
+                if (!byKey.has(key)) byKey.set(key, a);
+            });
+            return Array.from(byKey.values());
+        };
+        const mergeFolders = (existing, incoming) => {
+            const nameToId = new Map(existing.map(f => [f.name.toLowerCase(), f.id]));
+            const merged = existing.slice();
+            incoming.forEach(f => {
+                const key = f.name.toLowerCase();
+                if (!nameToId.has(key)) {
+                    merged.push(f);
+                    nameToId.set(key, f.id);
+                }
+            });
+            return merged;
+        };
+        const reattachAvatarsToMergedFolders = (avatars, folders) => {
+            const idSet = new Set(folders.map(f => f.id));
+            return avatars.map(a => ({ ...a, folderId: (a.folderId && idSet.has(a.folderId)) ? a.folderId : (a.folderId === null ? null : null) }));
+        };
+
+        const scanCookiesForLegacy = () => {
+            const candidates = ['vrchatAvatarLog', 'avatarLog', 'avatars', 'vrchatAvatars'];
+            const out = { avatars: [], folders: [] };
+            const cookiePairs = document.cookie.split('; ').filter(Boolean);
+            for (const c of cookiePairs) {
+                const [name, ...rest] = c.split('=');
+                const value = rest.join('=');
+                if (!candidates.includes(name)) continue;
+                const decoded = tryParseJson(decodeURIComponent(value));
+                if (!decoded) continue;
+                if (looksLikeAvatarArray(decoded)) {
+                    out.avatars = out.avatars.concat(decoded);
+                } else if (looksLikePayload(decoded)) {
+                    if (Array.isArray(decoded.folders)) out.folders = out.folders.concat(decoded.folders);
+                    if (Array.isArray(decoded.avatars)) out.avatars = out.avatars.concat(decoded.avatars);
+                }
+            }
+            return out;
+        };
+        const scanStorageForLegacy = (storage) => {
+            const out = { avatars: [], folders: [] };
+            try {
+                for (let i = 0; i < storage.length; i++) {
+                    const key = storage.key(i);
+                    if (!key) continue;
+                    if (!/avatar|vrchat|vrc/i.test(key)) continue;
+                    const raw = storage.getItem(key);
+                    if (!raw) continue;
+                    const parsed = tryParseJson(raw);
+                    if (!parsed) continue;
+                    if (looksLikeAvatarArray(parsed)) {
+                        out.avatars = out.avatars.concat(parsed);
+                    } else if (looksLikePayload(parsed)) {
+                        if (Array.isArray(parsed.folders)) out.folders = out.folders.concat(parsed.folders);
+                        if (Array.isArray(parsed.avatars)) out.avatars = out.avatars.concat(parsed.avatars);
+                    }
+                }
+            } catch {}
+            return out;
+        };
+        const importLegacyDataIfFound = () => {
+            const existingAvatars = getAvatarsFromStorage();
+            const existingFolders = getFoldersFromStorage();
+
+            const fromCookies = scanCookiesForLegacy();
+            const fromLocal = scanStorageForLegacy(localStorage);
+            const fromSession = scanStorageForLegacy(sessionStorage);
+
+            const combinedFoldersRaw = [...fromCookies.folders, ...fromLocal.folders, ...fromSession.folders];
+            const combinedAvatarsRaw = [...fromCookies.avatars, ...fromLocal.avatars, ...fromSession.avatars];
+
+            if (combinedAvatarsRaw.length === 0 && combinedFoldersRaw.length === 0) return; // nothing to import
+
+            const normalizedFolders = normalizeFolders(combinedFoldersRaw);
+            const folderIdSet = new Set(normalizedFolders.map(f => f.id));
+            const normalizedAvatars = normalizeAvatars(combinedAvatarsRaw, folderIdSet);
+
+            let mergedFolders = mergeFolders(existingFolders, normalizedFolders);
+            let mergedAvatars = dedupeAvatars(existingAvatars, normalizedAvatars);
+            mergedAvatars = reattachAvatarsToMergedFolders(mergedAvatars, mergedFolders);
+
+            saveFoldersToStorage(mergedFolders);
+            saveAvatarsToStorage(mergedAvatars);
+
+            renderFolderOptions();
+            renderCurrentView();
+            showNotification(`Imported ${normalizedAvatars.length} avatars and ${normalizedFolders.length} folders from legacy data.`, 6000);
+        };
+
         // --- Storage Functions (Folders) ---
         const getFoldersFromStorage = () => {
             const folderData = localStorage.getItem(STORAGE_KEY_FOLDERS);
@@ -1160,6 +1289,9 @@
             // 2. Render UI
             renderFolderOptions(); // Populates the 'move to' dropdown
             renderCurrentView(); // Renders the initial root view
+
+            // 3. Scan and import any legacy data sources (cookies, local/session storage)
+            try { importLegacyDataIfFound(); } catch (e) { console.warn('Legacy import failed:', e); }
         };
 
     </script>
