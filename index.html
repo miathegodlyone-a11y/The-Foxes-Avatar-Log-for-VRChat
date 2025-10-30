@@ -367,133 +367,110 @@
             return needsQuoting ? `"${escaped}"` : escaped;
         };
 
-        // --- Legacy Import Utilities ---
-        const tryParseJson = (text) => {
-            try {
-                return JSON.parse(text);
-            } catch {
-                return null;
-            }
+        // --- Import/Export helpers ---
+        const tryParseJson = (text) => { try { return JSON.parse(text); } catch { return null; } };
+        const isValidImportedPayload = (obj) => {
+            if (!obj || typeof obj !== 'object') return false;
+            return Array.isArray(obj.folders) && Array.isArray(obj.avatars);
         };
-        const looksLikeAvatar = (obj) => obj && (typeof obj === 'object') && (obj.avatarId || obj.avatarName);
-        const looksLikeAvatarArray = (val) => Array.isArray(val) && val.some(looksLikeAvatar);
-        const looksLikePayload = (val) => val && typeof val === 'object' && (Array.isArray(val.avatars) || Array.isArray(val.folders));
         const normalizeFolders = (folders) => {
             if (!Array.isArray(folders)) return [];
             return folders
                 .filter(f => f && (f.id || f.name))
                 .map(f => ({ id: ensureString(f.id) || crypto.randomUUID(), name: ensureString(f.name || 'Folder') }));
         };
-        const normalizeAvatars = (avatars, validFolderIds = new Set()) => {
+        const normalizeAvatars = (avatars) => {
             if (!Array.isArray(avatars)) return [];
             return avatars
-                .filter(looksLikeAvatar)
+                .filter(a => a && (a.avatarId || a.avatarName))
                 .map(a => ({
                     id: ensureString(a.id) || crypto.randomUUID(),
                     avatarName: ensureString(a.avatarName || 'Unnamed'),
                     avatarId: ensureString(a.avatarId || ''),
-                    creatorName: ensureString(a.creatorName || a.author || ''),
-                    imageUrl: ensureString(a.imageUrl || a.thumbnail || ''),
+                    creatorName: ensureString(a.creatorName || ''),
+                    imageUrl: ensureString(a.imageUrl || ''),
                     isPC: !!(a.isPC !== undefined ? a.isPC : true),
                     isQuest: !!(a.isQuest !== undefined ? a.isQuest : false),
                     notes: ensureString(a.notes || ''),
-                    folderId: (a.folderId === null || a.folderId === undefined) ? null : (validFolderIds.has(a.folderId) ? a.folderId : null)
+                    folderId: (a.folderId === null || a.folderId === undefined) ? null : ensureString(a.folderId)
                 }));
         };
-        const dedupeAvatars = (existing, incoming) => {
-            const byKey = new Map();
-            const keyOf = (a) => (a.avatarId && a.avatarId.startsWith('avtr_')) ? `id:${a.avatarId}` : `name:${a.avatarName.toLowerCase()}|by:${(a.creatorName||'').toLowerCase()}`;
-            existing.forEach(a => byKey.set(keyOf(a), a));
-            incoming.forEach(a => {
-                const key = keyOf(a);
-                if (!byKey.has(key)) byKey.set(key, a);
-            });
-            return Array.from(byKey.values());
-        };
-        const mergeFolders = (existing, incoming) => {
-            const nameToId = new Map(existing.map(f => [f.name.toLowerCase(), f.id]));
-            const merged = existing.slice();
-            incoming.forEach(f => {
-                const key = f.name.toLowerCase();
-                if (!nameToId.has(key)) {
-                    merged.push(f);
-                    nameToId.set(key, f.id);
-                }
-            });
-            return merged;
-        };
-        const reattachAvatarsToMergedFolders = (avatars, folders) => {
-            const idSet = new Set(folders.map(f => f.id));
-            return avatars.map(a => ({ ...a, folderId: (a.folderId && idSet.has(a.folderId)) ? a.folderId : (a.folderId === null ? null : null) }));
-        };
-
-        const scanCookiesForLegacy = () => {
-            const candidates = ['vrchatAvatarLog', 'avatarLog', 'avatars', 'vrchatAvatars'];
-            const out = { avatars: [], folders: [] };
-            const cookiePairs = document.cookie.split('; ').filter(Boolean);
-            for (const c of cookiePairs) {
-                const [name, ...rest] = c.split('=');
-                const value = rest.join('=');
-                if (!candidates.includes(name)) continue;
-                const decoded = tryParseJson(decodeURIComponent(value));
-                if (!decoded) continue;
-                if (looksLikeAvatarArray(decoded)) {
-                    out.avatars = out.avatars.concat(decoded);
-                } else if (looksLikePayload(decoded)) {
-                    if (Array.isArray(decoded.folders)) out.folders = out.folders.concat(decoded.folders);
-                    if (Array.isArray(decoded.avatars)) out.avatars = out.avatars.concat(decoded.avatars);
+        const mergeFoldersByName = (existingFolders, incomingFolders) => {
+            const nameToExisting = new Map(existingFolders.map(f => [f.name.toLowerCase(), f]));
+            const idRemap = new Map(); // incomingId -> finalId
+            const merged = existingFolders.slice();
+            for (const inf of incomingFolders) {
+                const key = inf.name.toLowerCase();
+                if (nameToExisting.has(key)) {
+                    const existing = nameToExisting.get(key);
+                    idRemap.set(inf.id, existing.id);
+                } else {
+                    const idInUse = merged.some(f => f.id === inf.id);
+                    const finalId = idInUse ? crypto.randomUUID() : inf.id;
+                    const nf = { id: finalId, name: inf.name };
+                    merged.push(nf);
+                    nameToExisting.set(key, nf);
+                    idRemap.set(inf.id, finalId);
                 }
             }
-            return out;
+            return { merged, idRemap };
         };
-        const scanStorageForLegacy = (storage) => {
-            const out = { avatars: [], folders: [] };
+        const dedupeAvatars = (existingAvatars, incomingAvatars, folderIdMap) => {
+            const result = existingAvatars.slice();
+            const keyOf = (a) => (a.avatarId && a.avatarId.startsWith('avtr_'))
+                ? `id:${a.avatarId}`
+                : `name:${a.avatarName.toLowerCase()}|by:${(a.creatorName||'').toLowerCase()}`;
+            const have = new Set(result.map(keyOf));
+            for (const a of incomingAvatars) {
+                const key = keyOf(a);
+                if (have.has(key)) continue; // keep existing, don't override
+                const mappedFolderId = (a.folderId == null) ? null : (folderIdMap.get(a.folderId) || null);
+                let finalId = a.id;
+                if (result.some(x => x.id === finalId)) finalId = crypto.randomUUID();
+                result.push({ ...a, id: finalId, folderId: mappedFolderId });
+                have.add(key);
+            }
+            return result;
+        };
+        const exportAllData = () => {
             try {
-                for (let i = 0; i < storage.length; i++) {
-                    const key = storage.key(i);
-                    if (!key) continue;
-                    if (!/avatar|vrchat|vrc/i.test(key)) continue;
-                    const raw = storage.getItem(key);
-                    if (!raw) continue;
-                    const parsed = tryParseJson(raw);
-                    if (!parsed) continue;
-                    if (looksLikeAvatarArray(parsed)) {
-                        out.avatars = out.avatars.concat(parsed);
-                    } else if (looksLikePayload(parsed)) {
-                        if (Array.isArray(parsed.folders)) out.folders = out.folders.concat(parsed.folders);
-                        if (Array.isArray(parsed.avatars)) out.avatars = out.avatars.concat(parsed.avatars);
-                    }
-                }
-            } catch {}
-            return out;
+                const folders = getFoldersFromStorage();
+                const avatars = getAvatarsFromStorage();
+                const payload = { version: 1, exportedAt: new Date().toISOString(), folders, avatars };
+                const json = JSON.stringify(payload, null, 2);
+                const blob = new Blob(['\ufeff' + json], { type: 'text/plain;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'vrchat_avatar_log_export.txt');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                showNotification('Exported all folders and avatars.', 3000);
+            } catch (e) {
+                console.error('Export failed:', e);
+                showNotification('Export failed.', 5000);
+            }
         };
-        const importLegacyDataIfFound = () => {
-            const existingAvatars = getAvatarsFromStorage();
+        const importAllDataFromText = (text) => {
+            const obj = tryParseJson(text);
+            if (!isValidImportedPayload(obj)) {
+                showNotification('Invalid import file format.', 5000);
+                return;
+            }
             const existingFolders = getFoldersFromStorage();
-
-            const fromCookies = scanCookiesForLegacy();
-            const fromLocal = scanStorageForLegacy(localStorage);
-            const fromSession = scanStorageForLegacy(sessionStorage);
-
-            const combinedFoldersRaw = [...fromCookies.folders, ...fromLocal.folders, ...fromSession.folders];
-            const combinedAvatarsRaw = [...fromCookies.avatars, ...fromLocal.avatars, ...fromSession.avatars];
-
-            if (combinedAvatarsRaw.length === 0 && combinedFoldersRaw.length === 0) return; // nothing to import
-
-            const normalizedFolders = normalizeFolders(combinedFoldersRaw);
-            const folderIdSet = new Set(normalizedFolders.map(f => f.id));
-            const normalizedAvatars = normalizeAvatars(combinedAvatarsRaw, folderIdSet);
-
-            let mergedFolders = mergeFolders(existingFolders, normalizedFolders);
-            let mergedAvatars = dedupeAvatars(existingAvatars, normalizedAvatars);
-            mergedAvatars = reattachAvatarsToMergedFolders(mergedAvatars, mergedFolders);
-
+            const existingAvatars = getAvatarsFromStorage();
+            const normalizedFolders = normalizeFolders(obj.folders);
+            const normalizedAvatars = normalizeAvatars(obj.avatars);
+            const { merged: mergedFolders, idRemap } = mergeFoldersByName(existingFolders, normalizedFolders);
+            const mergedAvatars = dedupeAvatars(existingAvatars, normalizedAvatars, idRemap);
             saveFoldersToStorage(mergedFolders);
             saveAvatarsToStorage(mergedAvatars);
-
             renderFolderOptions();
             renderCurrentView();
-            showNotification(`Imported ${normalizedAvatars.length} avatars and ${normalizedFolders.length} folders from legacy data.`, 6000);
+            showNotification(`Imported ${normalizedAvatars.length} avatars and ${normalizedFolders.length} folders. Existing items preserved.`, 6000);
         };
 
         // --- Storage Functions (Folders) ---
@@ -516,83 +493,6 @@
             } catch (e) {
                 console.error("Error saving folders:", e);
                 showNotification("Error: Could not save folder data.", 5000);
-            }
-        };
-
-        // --- Full Export/Import Helpers ---
-        const exportAllData = () => {
-            try {
-                const folders = getFoldersFromStorage();
-                const avatars = getAvatarsFromStorage();
-                const payload = {
-                    version: 1,
-                    exportedAt: new Date().toISOString(),
-                    folders,
-                    avatars,
-                };
-                const json = JSON.stringify(payload, null, 2);
-                const blob = new Blob(['\ufeff' + json], { type: 'text/plain;charset=utf-8;' });
-                const link = document.createElement('a');
-                const url = URL.createObjectURL(blob);
-                link.setAttribute('href', url);
-                link.setAttribute('download', 'vrchat_avatar_log_export.txt');
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-                showNotification('Exported all folders and avatars.', 3000);
-            } catch (e) {
-                console.error('Export failed:', e);
-                showNotification('Export failed.', 5000);
-            }
-        };
-
-        const isValidImportedPayload = (obj) => {
-            if (!obj || typeof obj !== 'object') return false;
-            if (!Array.isArray(obj.folders) || !Array.isArray(obj.avatars)) return false;
-            return true;
-        };
-
-        const importAllDataFromText = async (text) => {
-            try {
-                const obj = JSON.parse(text);
-                if (!isValidImportedPayload(obj)) {
-                    showNotification('Invalid import file format.', 5000);
-                    return;
-                }
-
-                // Basic normalization to ensure required fields exist
-                const normalizedFolders = obj.folders
-                    .filter(f => f && (f.id || f.name))
-                    .map(f => ({ id: ensureString(f.id) || crypto.randomUUID(), name: ensureString(f.name || 'Folder') }));
-
-                const normalizedFolderIds = new Set(normalizedFolders.map(f => f.id));
-
-                const normalizedAvatars = obj.avatars
-                    .filter(a => a && (a.avatarId || a.avatarName))
-                    .map(a => ({
-                        id: ensureString(a.id) || crypto.randomUUID(),
-                        avatarName: ensureString(a.avatarName || 'Unnamed'),
-                        avatarId: ensureString(a.avatarId || ''),
-                        creatorName: ensureString(a.creatorName || ''),
-                        imageUrl: ensureString(a.imageUrl || ''),
-                        isPC: !!(a.isPC !== undefined ? a.isPC : true),
-                        isQuest: !!(a.isQuest !== undefined ? a.isQuest : false),
-                        notes: ensureString(a.notes || ''),
-                        folderId: (a.folderId === null || a.folderId === undefined) ? null : (normalizedFolderIds.has(a.folderId) ? a.folderId : null)
-                    }));
-
-                // Save
-                saveFoldersToStorage(normalizedFolders);
-                saveAvatarsToStorage(normalizedAvatars);
-
-                renderFolderOptions();
-                renderCurrentView();
-                showNotification('Imported folders and avatars.', 4000);
-            } catch (e) {
-                console.error('Import failed:', e);
-                showNotification('Import failed. Ensure the file was exported from this app.', 6000);
             }
         };
 
@@ -1249,8 +1149,7 @@
         massEditBtn.addEventListener('click', toggleMassEditMode);
         cancelMassEditBtn.addEventListener('click', toggleMassEditMode);
         massExportBtn.addEventListener('click', handleMassExport); // Wire up the new button
-
-        // --- Wire Global Import/Export ---
+        // Global Import/Export wiring
         exportAllBtn.addEventListener('click', exportAllData);
         importAllBtn.addEventListener('click', () => importFileInput.click());
         importFileInput.addEventListener('change', (e) => {
@@ -1289,9 +1188,6 @@
             // 2. Render UI
             renderFolderOptions(); // Populates the 'move to' dropdown
             renderCurrentView(); // Renders the initial root view
-
-            // 3. Scan and import any legacy data sources (cookies, local/session storage)
-            try { importLegacyDataIfFound(); } catch (e) { console.warn('Legacy import failed:', e); }
         };
 
     </script>
