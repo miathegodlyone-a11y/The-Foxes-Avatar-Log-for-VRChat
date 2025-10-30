@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your VRChat Avatar Log</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦊</text></svg>">
+    <title>VRChat Avatar Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -12,11 +11,13 @@
             font-family: 'Inter', sans-serif;
             background-color: #2c2a4a; /* Dark Violet */
             color: #e6e6fa; /* Lavender White */
+            padding-bottom: 80px; /* Add padding for the mass edit bar */
         }
         .card {
             background-color: #4f4c7a; /* Muted Violet */
             border: 1px solid #7f7fd5; /* Brighter Violet */
             transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative; /* For checkbox positioning */
         }
         .card:hover {
             transform: translateY(-5px);
@@ -44,7 +45,7 @@
         .btn-secondary:hover {
              background-color: #5a5c72;
         }
-        input, textarea {
+        input[type="text"], input[type="url"], input[type="search"], textarea, select {
             background-color: #4f4c7a; /* Muted Violet */
             border: 1px solid #7f7fd5; /* Brighter Violet */
             color: #e6e6fa;
@@ -52,24 +53,79 @@
         input::placeholder, textarea::placeholder {
             color: #b0b0d0;
         }
+        select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            padding-right: 2.5rem; /* space for arrow */
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239e9ecb' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+        }
         .modal-backdrop {
             background-color: rgba(0,0,0,0.7);
         }
         .modal-content {
             background-color: #2c2a4a; /* Dark Violet */
         }
+        .platform-icon {
+            width: 24px; /* Slightly larger for better visibility */
+            height: 24px;
+            padding: 2px; /* Small padding inside the circle */
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box; /* Include padding in width/height */
+        }
+        .platform-icon.pc {
+            border: 2px solid #0078D4; /* Windows blue */
+            color: #0078D4;
+        }
+        .platform-icon.quest {
+            border: 2px solid #3DDC84; /* Android green */
+            color: #3DDC84;
+        }
+        
+        /* Mass Edit Styles */
+        #mass-edit-action-bar {
+            background-color: #1e1e2f; /* Darker base */
+            border-top: 1px solid #7f7fd5;
+        }
+        .mass-edit-checkbox {
+            display: none; /* Hidden by default */
+            width: 1.5rem;
+            height: 1.5rem;
+            accent-color: #a855f7; /* Purple */
+        }
+        .card-buttons {
+            display: flex; /* Visible by default */
+        }
+
+        /* When in mass edit mode */
+        body.mass-edit-active .mass-edit-checkbox {
+            display: block; /* Show checkboxes */
+        }
+        body.mass-edit-active .card-buttons {
+            display: none; /* Hide individual buttons */
+        }
     </style>
 </head>
 <body class="antialiased">
     <!-- Notification Element -->
-    <div id="notification" class="fixed top-5 right-5 bg-green-500 text-white p-4 rounded-lg shadow-lg z-50 hidden transition-opacity duration-300 max-w-sm">
+    <div id="notification" class="fixed top-5 right-5 bg-red-600 text-white p-4 rounded-lg shadow-lg z-50 hidden transition-opacity duration-300 max-w-sm">
     </div>
 
     <!-- Main App Container -->
     <div id="app-container">
         <div class="container mx-auto p-4 md:p-8">
             <header class="text-center mb-8 relative">
-                <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">🐰 Your VRChat Avatar Log 🦊</h1>
+                <h1 class="text-4xl md:text-5xl font-bold text-white mb-2 flex items-center justify-center space-x-2">
+                    <span>🐰</span>
+                    <span>VRChat Avatar Log</span>
+                    <span>🦊</span>
+                </h1>
                 <p class="text-lg text-gray-400">Your personal database of discovered avatars.</p>
             </header>
 
@@ -97,9 +153,10 @@
                         <label for="imageUrl" class="block mb-2 text-sm font-medium">Image URL</label>
                         <input type="url" id="imageUrl" placeholder="https://..." class="w-full rounded-md p-2">
                     </div>
+                    <!-- Platform Checkboxes removed from Add form -->
                     <div class="md:col-span-2">
                         <label for="notes" class="block mb-2 text-sm font-medium">Notes</label>
-                        <textarea id="notes" rows="3" placeholder="Quest compatible, cool shaders, etc." class="w-full rounded-md p-2"></textarea>
+                        <textarea id="notes" rows="3" placeholder="Cool shaders, custom animations, etc." class="w-full rounded-md p-2"></textarea>
                     </div>
                     <div class="md:col-span-2 text-right">
                         <button type="submit" class="btn-primary text-white font-bold py-2 px-4 rounded-md shadow-md">
@@ -109,14 +166,56 @@
                 </form>
             </div>
 
-            <!-- Search Bar -->
-            <div class="mb-8 max-w-4xl mx-auto">
-                 <label for="searchBar" class="block mb-2 text-sm font-medium text-gray-300">Search Avatars</label>
-                <input type="search" id="searchBar" placeholder="Search by name, creator, or ID..." class="w-full rounded-md p-3 bg-[#4f4c7a] border border-[#7f7fd5] text-white placeholder-gray-400 focus:ring-2 focus:ring-[#a855f7] focus:outline-none transition">
+            <!-- Import Avatars Card -->
+            <div class="card rounded-lg p-6 mb-8 max-w-2xl mx-auto shadow-lg">
+                <h2 class="text-2xl font-semibold mb-4 text-white">Import Avatars</h2>
+                <p class="text-gray-300 mb-4">Paste your avatar list below. Each avatar on a new line, in this format:<br><code class="text-sm bg-gray-900 px-1 py-0.5 rounded">ID,Name,Author,ImageURL</code></p>
+                <textarea id="import-textarea" rows="5" placeholder="avtr_...,Cyberpunk Fox,Rexouium,https://..." class="w-full rounded-md p-2 mb-4"></textarea>
+                <div class="flex justify-between items-center">
+                    <button id="import-btn" class="btn-primary text-white font-bold py-2 px-4 rounded-md shadow-md">
+                        Import List
+                    </button>
+                    <span id="import-status" class="text-gray-400 text-sm"></span>
+                </div>
             </div>
 
-            <div id="avatar-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Avatar cards will be inserted here -->
+            <!-- Search, Folder, and Edit Controls -->
+            <div class="mb-8 max-w-4xl mx-auto space-y-4">
+                <!-- Search Bar -->
+                <div>
+                    <label for="searchBar" class="block mb-2 text-sm font-medium text-gray-300">Search</label>
+                    <input type="search" id="searchBar" placeholder="Search by name, creator, ID, or 'pc' / 'quest'..." class="w-full rounded-md p-3 transition">
+                </div>
+
+                <!-- Folder Management -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="new-folder-name" class="block mb-2 text-sm font-medium text-gray-300">Create New Folder</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="new-folder-name" placeholder="e.g., Furry Avatars" class="w-full rounded-md p-2">
+                            <button id="add-folder-btn" class="btn-primary text-white font-bold py-2 px-4 rounded-md shadow-md">Add</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Navigation Bar -->
+                <div id="navigation-bar" class="my-4 flex items-center justify-between">
+                    <h2 id="current-view-title" class="text-2xl font-semibold text-white">Folders</h2>
+                    <button id="back-to-root-btn" class="btn-secondary text-white font-bold py-2 px-4 rounded-md shadow-md hidden">
+                        &larr; Back to Folders
+                    </button>
+                </div>
+
+                <!-- Search Bar -->
+                
+                <!-- Mass Edit Button -->
+                <div>
+                    <button id="mass-edit-btn" class="btn-secondary text-white font-bold py-2 px-4 rounded-md shadow-md w-full md:w-auto">Mass Edit</button>
+                </div>
+            </div>
+
+            <div id="item-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Avatar and Folder cards will be inserted here -->
             </div>
         </div>
 
@@ -147,6 +246,17 @@
                         <label for="editImageUrl" class="block mb-2 text-sm font-medium">Image URL</label>
                         <input type="url" id="editImageUrl" class="w-full rounded-md p-2">
                     </div>
+                    <!-- Platform Checkboxes for Edit Modal -->
+                    <div class="md:col-span-2 flex items-center gap-4 mt-2">
+                        <label class="flex items-center space-x-2 text-white">
+                            <input type="checkbox" id="editIsPC" class="form-checkbox text-purple-600">
+                            <span>PC Compatible</span>
+                        </label>
+                        <label class="flex items-center space-x-2 text-white">
+                            <input type="checkbox" id="editIsQuest" class="form-checkbox text-purple-600">
+                            <span>Quest Compatible</span>
+                        </label>
+                    </div>
                     <div class="md:col-span-2">
                         <label for="editNotes" class="block mb-2 text-sm font-medium">Notes</label>
                         <textarea id="editNotes" rows="3" class="w-full rounded-md p-2"></textarea>
@@ -160,9 +270,31 @@
         </div>
     </div>
 
+    <!-- Mass Edit Action Bar -->
+    <div id="mass-edit-action-bar" class="fixed bottom-0 left-0 right-0 p-4 shadow-lg z-40 hidden">
+        <div class="container mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <span class="text-white font-semibold text-lg">Mass Edit Mode</span>
+            <div class="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+                <div class="flex items-center gap-2">
+                    <label for="move-to-folder" class="text-gray-300 text-sm">Move to:</label>
+                    <select id="move-to-folder" class="rounded-md p-2 text-sm">
+                        <!-- Folder options will be inserted here -->
+                    </select>
+                    <button id="mass-move-btn" class="btn-primary text-white font-bold py-2 px-3 rounded-md shadow-md text-sm">Move</button>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button id="mass-export-btn" class="btn-primary text-white font-bold py-2 px-3 rounded-md shadow-md text-sm">Export Selected</button>
+                    <button id="mass-delete-btn" class="btn-danger text-white font-bold py-2 px-3 rounded-md shadow-md text-sm">Delete Selected</button>
+                    <button id="cancel-mass-edit-btn" class="btn-secondary text-white font-bold py-2 px-3 rounded-md shadow-md text-sm">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
     <script type="module">
         // --- DOM Elements ---
-        const avatarList = document.getElementById('avatar-list');
+        const itemList = document.getElementById('item-list'); // Renamed from avatarList
         const addAvatarForm = document.getElementById('add-avatar-form');
         const editModal = document.getElementById('edit-modal');
         const editAvatarForm = document.getElementById('edit-avatar-form');
@@ -170,160 +302,395 @@
         const searchBar = document.getElementById('searchBar');
         const lookupAvatarBtn = document.getElementById('lookupAvatarBtn');
         const lookupEditAvatarBtn = document.getElementById('lookupEditAvatarBtn');
-        
-        // --- Storage Configuration ---
-        const STORAGE_KEY = 'vrchatAvatarLog';
-        const OLD_COOKIE_NAME = 'vrchatAvatarLog'; // For one-time migration
+        const importTextarea = document.getElementById('import-textarea');
+        const importBtn = document.getElementById('import-btn');
+        const importStatus = document.getElementById('import-status');
 
-        // --- Local Storage Functions ---
-        const getAvatarsFromStorage = () => {
-            const storageValue = localStorage.getItem(STORAGE_KEY);
-            if (storageValue) {
+        // --- New Folder/Mass Edit DOM Elements ---
+        const newFolderInput = document.getElementById('new-folder-name');
+        const addFolderBtn = document.getElementById('add-folder-btn');
+        const massEditBtn = document.getElementById('mass-edit-btn');
+        const massEditActionBar = document.getElementById('mass-edit-action-bar');
+        const moveToFolderSelect = document.getElementById('move-to-folder');
+        const massMoveBtn = document.getElementById('mass-move-btn');
+        const massDeleteBtn = document.getElementById('mass-delete-btn');
+        const cancelMassEditBtn = document.getElementById('cancel-mass-edit-btn');
+        const massExportBtn = document.getElementById('mass-export-btn'); // New Export Button
+        
+        // --- New Navigation Elements ---
+        const currentViewTitle = document.getElementById('current-view-title');
+        const backToRootBtn = document.getElementById('back-to-root-btn');
+
+        // --- Storage Keys ---
+        const STORAGE_KEY = 'vrchatAvatarLog';
+        const STORAGE_KEY_FOLDERS = 'vrchatAvatarFolders';
+        const COOKIE_NAME = 'vrchatAvatarLog'; // For migration
+
+        // --- App State ---
+        let isMassEditMode = false;
+        let currentFolderId = null; // null = Root view, string = Folder view
+
+        // --- Notification ---
+        const showNotification = (message, duration = 5000) => {
+            const notification = document.getElementById('notification');
+            if (!notification) return;
+            notification.textContent = message;
+            notification.classList.remove('hidden');
+            setTimeout(() => {
+                notification.classList.add('hidden');
+            }, duration);
+        };
+
+        // --- Storage Functions (Folders) ---
+        const getFoldersFromStorage = () => {
+            const folderData = localStorage.getItem(STORAGE_KEY_FOLDERS);
+            if (folderData) {
                 try {
-                    return JSON.parse(storageValue);
+                    return JSON.parse(folderData);
                 } catch (e) {
-                    console.error("Error parsing avatars from local storage:", e);
+                    console.error("Error parsing folders:", e);
                     return [];
                 }
             }
             return [];
         };
 
+        const saveFoldersToStorage = (folders) => {
+            try {
+                localStorage.setItem(STORAGE_KEY_FOLDERS, JSON.stringify(folders));
+            } catch (e) {
+                console.error("Error saving folders:", e);
+                showNotification("Error: Could not save folder data.", 5000);
+            }
+        };
+
+        // --- Storage Functions (Avatars) ---
         const saveAvatarsToStorage = (avatars) => {
             try {
                 const jsonValue = JSON.stringify(avatars);
                 localStorage.setItem(STORAGE_KEY, jsonValue);
-            } catch (error) {
-                console.error("Error saving to localStorage:", error);
-                showNotification("Could not save avatars. Storage might be full.", 6000, true);
+            } catch (e) {
+                console.error("Error saving avatars to localStorage:", e);
+                showNotification("Error: Could not save avatar data. Storage might be full.", 5000);
             }
         };
-        
-        // --- Legacy Cookie Function (for migration) ---
-        const getAvatarsFromCookie_forMigration = () => {
+
+        const getAvatarsFromCookieForMigration = () => {
             const cookieValue = document.cookie
                 .split('; ')
-                .find(row => row.startsWith(`${OLD_COOKIE_NAME}=`));
+                .find(row => row.startsWith(`${COOKIE_NAME}=`));
 
             if (cookieValue) {
                 try {
                     return JSON.parse(decodeURIComponent(cookieValue.split('=')[1]));
                 } catch (e) {
-                    console.error("Error parsing avatars from cookie:", e);
+                    console.error("Error parsing avatars from cookie for migration:", e);
+                    return null;
+                }
+            }
+            return null;
+        };
+        
+        const clearOldCookie = () => {
+             document.cookie = `${COOKIE_NAME}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSiteLax`;
+        };
+
+        const getAvatarsFromStorage = () => {
+            // 1. Try localStorage first
+            const localData = localStorage.getItem(STORAGE_KEY);
+            if (localData) {
+                try {
+                    // No folder migration needed here, will be handled on load
+                    return JSON.parse(localData);
+                } catch (e) {
+                    console.error("Error parsing avatars from localStorage:", e);
                     return [];
                 }
             }
+
+            // 2. If no localStorage, try migrating from cookie
+            const cookieData = getAvatarsFromCookieForMigration();
+            if (cookieData && Array.isArray(cookieData) && cookieData.length > 0) {
+                console.log("Migrating avatar data from cookie to localStorage...");
+                const migratedData = cookieData.map(avatar => ({
+                    ...avatar,
+                    isPC: avatar.isPC !== undefined ? avatar.isPC : true,
+                    isQuest: avatar.isQuest !== undefined ? avatar.isQuest : false,
+                    folderId: null // Add folderId during migration
+                }));
+                saveAvatarsToStorage(migratedData);
+                clearOldCookie();
+                showNotification(`Migrated ${migratedData.length} avatars to new storage.`, 4000);
+                return migratedData;
+            }
+            
+            // 3. If nothing, return empty array
             return [];
         };
 
+        // --- Folder UI ---
+        const renderFolderOptions = () => {
+            const folders = getFoldersFromStorage();
+            // Clear existing options (but keep defaults)
+            moveToFolderSelect.innerHTML = `
+                <option value="uncategorized">Uncategorized</option>
+            `; // 'Move to All' doesn't make sense
 
-        // --- Render Avatars ---
-        const renderAvatars = (avatars) => {
-            avatarList.innerHTML = '';
-            if (avatars.length === 0) {
-                avatarList.innerHTML = `<div class="col-span-full text-center text-gray-400 py-10"><p>No avatars logged yet. Add one using the form above!</p></div>`;
-                return;
-            }
-            avatars.forEach(avatar => {
-                const card = document.createElement('div');
-                // Added cursor-pointer to indicate the card is clickable
-                card.className = 'card rounded-lg p-4 flex flex-col shadow-lg cursor-pointer';
-                card.innerHTML = `
-                    <img src="${avatar.imageUrl || 'https://placehold.co/600x400/162447/e0e0e0?text=No+Image'}" 
-                         alt="${avatar.avatarName}" 
-                         onerror="this.onerror=null;this.src='https://placehold.co/600x400/162447/e0e0e0?text=Invalid+Image';"
-                         class="w-full h-48 object-cover rounded-md mb-4">
-                    <h3 class="text-xl font-bold text-white">${avatar.avatarName}</h3>
-                    <p class="text-sm text-gray-300 mb-1">by ${avatar.creatorName || 'Unknown'}</p>
-                    <p class="text-xs text-gray-400 font-mono mb-3 break-all">${avatar.avatarId}</p>
-                    <p class="text-gray-300 text-sm mb-4 flex-grow">${avatar.notes || 'No notes.'}</p>
-                    <div class="mt-auto flex justify-end gap-2">
-                        <button class="show-btn btn-primary text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${avatar.avatarId}" title="Show this avatar on VRChat.com">Show</button>
-                        <button class="edit-btn btn-secondary text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${avatar.id}">Edit</button>
-                        <button class="delete-btn btn-danger text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${avatar.id}">Delete</button>
-                    </div>
-                `;
-                avatarList.appendChild(card);
-
-                const openEdit = (e) => {
-                    e.stopPropagation(); // Prevent card click from firing
-                    const fullAvatar = getAvatarsFromStorage().find(a => a.id === avatar.id);
-                    if (fullAvatar) {
-                        openEditModal(fullAvatar);
-                    }
-                };
-
-                const handleDelete = (e) => {
-                    e.stopPropagation();
-                    deleteAvatar(avatar.id);
-                };
-                
-                const handleShow = (e) => {
-                    e.stopPropagation();
-                    const avatarId = e.currentTarget.dataset.id;
-                    if (avatarId && avatarId.trim().startsWith('avtr_')) {
-                        const url = `https://vrchat.com/home/avatar/${avatarId.trim()}`;
-                        window.open(url, '_blank');
-                    } else {
-                        showNotification("This avatar doesn't have a valid ID to show.", 4000, true);
-                    }
-                }
-
-                // Make the whole card clickable to open in VRCX
-                card.addEventListener('click', (e) => {
-                    // If a button inside the card is clicked, let its own event handler work
-                    if (e.target.closest('button')) {
-                        return;
-                    }
-                    // Otherwise, open the VRCX link
-                    if (avatar.avatarId && avatar.avatarId.trim().startsWith('avtr_')) {
-                        const url = `vrcx://switchavatar/${avatar.avatarId.trim()}`;
-                        window.location.href = url;
-                    }
-                });
-
-                 // Event listeners for show, edit and delete buttons
-                card.querySelector('.show-btn').addEventListener('click', handleShow);
-                card.querySelector('.edit-btn').addEventListener('click', openEdit);
-                card.querySelector('.delete-btn').addEventListener('click', handleDelete);
+            folders.forEach(folder => {
+                const optionHTML = `<option value="${folder.id}">${folder.name}</option>`;
+                moveToFolderSelect.innerHTML += optionHTML;
             });
         };
 
-        // --- Search/Filter Avatars ---
-        const filterAvatars = () => {
+        const handleAddFolder = () => {
+            const folderName = newFolderInput.value.trim();
+            if (!folderName) {
+                showNotification("Please enter a folder name.", 4000);
+                return;
+            }
+
+            const folders = getFoldersFromStorage();
+            const newFolder = {
+                id: crypto.randomUUID(),
+                name: folderName
+            };
+            folders.push(newFolder);
+            saveFoldersToStorage(folders);
+            
+            newFolderInput.value = '';
+            renderFolderOptions(); // Update the 'move to' dropdown
+            renderCurrentView(); // Re-render the main view to show new folder
+            showNotification(`Folder "${folderName}" created!`, 3000);
+        };
+
+        addFolderBtn.addEventListener('click', handleAddFolder);
+
+        // --- Navigation ---
+        const navigateToFolder = (folderId) => {
+            currentFolderId = folderId;
+            renderCurrentView();
+        };
+
+        const navigateToRoot = () => {
+            currentFolderId = null;
+            renderCurrentView();
+        };
+
+        backToRootBtn.addEventListener('click', navigateToRoot);
+
+
+        // --- Render Folder Card ---
+        const renderFolderCard = (folder, avatarCount) => {
+            const card = document.createElement('div');
+            card.className = 'card rounded-lg p-4 flex flex-col shadow-lg';
+            card.innerHTML = `
+                <div class="flex-grow">
+                    <!-- Mass Edit Checkbox (for avatars, not folders) -->
+                    <input type="checkbox" class="mass-edit-checkbox absolute top-2 right-2 w-6 h-6 z-10" style="display: none;">
+                    
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 mb-4 text-purple-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    </svg>
+                    <h3 class="text-xl font-bold text-white">${folder.name}</h3>
+                    <p class="text-sm text-gray-300 mb-1">${avatarCount} avatar(s)</p>
+                </div>
+                <div class="mt-auto flex justify-end gap-2">
+                    <button class="export-folder-btn btn-secondary text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${folder.id}">Export</button>
+                    <button class="open-folder-btn btn-primary text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${folder.id}">Open</button>
+                    <!-- Add folder edit/delete later if needed -->
+                </div>
+            `;
+            
+            card.querySelector('.open-folder-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                navigateToFolder(folder.id);
+            });
+
+            // New: Add listener for export button
+            card.querySelector('.export-folder-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleExportFolder(folder.id, folder.name); // Pass name for filename
+            });
+
+            // Folders are not clickable for VRCX
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('button')) return;
+                navigateToFolder(folder.id);
+            });
+
+            itemList.appendChild(card);
+        };
+
+        // --- Render Avatar Card ---
+        const renderAvatarCard = (avatar) => {
+            const card = document.createElement('div');
+            card.className = 'card rounded-lg p-4 flex flex-col shadow-lg cursor-pointer';
+            card.innerHTML = `
+                <!-- Mass Edit Checkbox -->
+                <input type="checkbox" class="mass-edit-checkbox absolute top-2 right-2 w-6 h-6 z-10" data-id="${avatar.id}">
+
+                <img src="${avatar.imageUrl || 'https://placehold.co/600x400/162447/e0e0e0?text=No+Image'}" 
+                     alt="${avatar.avatarName}" 
+                     onerror="this.onerror=null;this.src='https://placehold.co/600x400/162447/e0e0e0?text=Invalid+Image';"
+                     class="w-full h-48 object-cover rounded-md mb-4">
+                <h3 class="text-xl font-bold text-white">${avatar.avatarName}</h3>
+                <p class="text-sm text-gray-300 mb-1">by ${avatar.creatorName || 'Unknown'}</p>
+                <p class="text-xs text-gray-400 font-mono mb-3 break-all">${avatar.avatarId}</p>
+                
+                <p class="text-gray-300 text-sm mb-4 flex-grow">${avatar.notes || 'No notes.'}</p>
+                
+                <!-- Individual Card Buttons -->
+                <div class="card-buttons mt-auto flex justify-end gap-2">
+                    <button class="select-btn btn-primary text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${avatar.id}" title="Select this avatar in VRChat">Select</button>
+                    <button class="edit-btn btn-secondary text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${avatar.id}">Edit</button>
+                    <button class="delete-btn btn-danger text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${avatar.id}">Delete</button>
+                </div>
+            `;
+            itemList.appendChild(card);
+
+            const openEdit = (e) => {
+                e.stopPropagation();
+                const fullAvatar = getAvatarsFromStorage().find(a => a.id === avatar.id);
+                if (fullAvatar) {
+                    openEditModal(fullAvatar);
+                }
+            };
+
+            const handleDelete = (e) => {
+                e.stopPropagation();
+                deleteAvatar(avatar.id);
+            };
+            
+            const handleSelect = (e) => {
+                e.stopPropagation();
+                // selectAvatar(avatar.avatarId); // Old placeholder
+                
+                // New: Open VRCX link directly
+                if (avatar.avatarId && avatar.avatarId.trim().startsWith('avtr_')) {
+                    const url = `vrcx://switchavatar/${avatar.avatarId.trim()}`;
+                    window.location.href = url;
+                } else {
+                    showNotification("This avatar doesn't have a valid ID to select.", 4000);
+                }
+            }
+
+            // Make the whole card clickable to open in VRCX (if not in mass edit)
+            card.addEventListener('click', (e) => {
+                if (isMassEditMode) {
+                    // If in mass edit, toggle the checkbox
+                    const checkbox = card.querySelector('.mass-edit-checkbox');
+                    if (e.target !== checkbox) {
+                         checkbox.checked = !checkbox.checked;
+                    }
+                    return;
+                }
+                if (e.target.closest('button')) {
+                    return;
+                }
+                if (avatar.avatarId && avatar.avatarId.trim().startsWith('avtr_')) {
+                    const url = `vrcx://switchavatar/${avatar.avatarId.trim()}`; // Updated format
+                    window.location.href = url;
+                }
+            });
+
+            card.querySelector('.select-btn').addEventListener('click', handleSelect);
+            card.querySelector('.edit-btn').addEventListener('click', openEdit);
+            card.querySelector('.delete-btn').addEventListener('click', handleDelete);
+        };
+
+        // --- Main Render Function ---
+        const renderCurrentView = () => {
             const searchTerm = searchBar.value.toLowerCase();
             const allAvatars = getAvatarsFromStorage();
+            const allFolders = getFoldersFromStorage();
             
-            if (!searchTerm) {
-                renderAvatars(allAvatars);
+            itemList.innerHTML = ''; // Clear the list
+
+            if (currentFolderId === null) {
+                // --- ROOT VIEW ---
+                currentViewTitle.textContent = 'Folders';
+                backToRootBtn.classList.add('hidden');
+
+                // 1. Render Folders
+                const filteredFolders = allFolders.filter(folder => 
+                    folder.name.toLowerCase().includes(searchTerm)
+                );
+
+                if (filteredFolders.length > 0) {
+                    filteredFolders.forEach(folder => {
+                        const avatarCount = allAvatars.filter(a => a.folderId === folder.id).length;
+                        renderFolderCard(folder, avatarCount);
+                    });
+                }
+
+                // 2. Render Uncategorized Avatars
+                // Search only applies to folders OR uncategorized avatars, not both at same time?
+                // Let's search both.
+                const uncategorizedAvatars = allAvatars.filter(avatar => 
+                    !avatar.folderId && (
+                        avatar.avatarName.toLowerCase().includes(searchTerm) ||
+                        (avatar.creatorName || '').toLowerCase().includes(searchTerm) ||
+                        avatar.avatarId.toLowerCase().includes(searchTerm) ||
+                        (searchTerm.includes('pc') && avatar.isPC) ||
+                        (searchTerm.includes('quest') && avatar.isQuest)
+                    )
+                );
+
+                if (uncategorizedAvatars.length > 0) {
+                    // Add a divider/title
+                    const divider = document.createElement('h3');
+                    divider.className = "text-xl font-semibold text-gray-300 col-span-full mt-6 mb-2";
+                    divider.textContent = "Uncategorized Avatars";
+                    itemList.appendChild(divider);
+                    
+                    uncategorizedAvatars.forEach(avatar => {
+                        renderAvatarCard(avatar);
+                    });
+                }
+
+                if (filteredFolders.length === 0 && uncategorizedAvatars.length === 0) {
+                     itemList.innerHTML = `<div class="col-span-full text-center text-gray-400 py-10"><p>No folders or avatars found.</p></div>`;
+                }
+
+            } else {
+                // --- FOLDER VIEW ---
+                const folder = allFolders.find(f => f.id === currentFolderId);
+                currentViewTitle.textContent = folder ? folder.name : 'Folder';
+                backToRootBtn.classList.remove('hidden');
+
+                // Filter avatars in this folder
+                const avatarsInFolder = allAvatars.filter(avatar => 
+                    avatar.folderId === currentFolderId && (
+                        avatar.avatarName.toLowerCase().includes(searchTerm) ||
+                        (avatar.creatorName || '').toLowerCase().includes(searchTerm) ||
+                        avatar.avatarId.toLowerCase().includes(searchTerm) ||
+                        (searchTerm.includes('pc') && avatar.isPC) ||
+                        (searchTerm.includes('quest') && avatar.isQuest)
+                    )
+                );
+
+                if (avatarsInFolder.length > 0) {
+                    avatarsInFolder.forEach(avatar => {
+                        renderAvatarCard(avatar);
+                    });
+                } else {
+                     itemList.innerHTML = `<div class="col-span-full text-center text-gray-400 py-10"><p>No avatars found in this folder.</p></div>`;
+                }
+            }
+        };
+
+        searchBar.addEventListener('input', renderCurrentView);
+        
+        // --- Select Avatar (Placeholder) ---
+        const selectAvatar = (avatarId) => {
+            if (!avatarId || !avatarId.startsWith('avtr_')) {
+                showNotification("This avatar doesn't have a valid ID to select.", 4000);
                 return;
             }
-
-            const filteredAvatars = allAvatars.filter(avatar => {
-                const nameMatch = avatar.avatarName.toLowerCase().includes(searchTerm);
-                const creatorMatch = (avatar.creatorName || '').toLowerCase().includes(searchTerm);
-                const idMatch = avatar.avatarId.toLowerCase().includes(searchTerm);
-                return nameMatch || creatorMatch || idMatch;
-            });
-
-            renderAvatars(filteredAvatars);
+            console.log(`Attempting to select avatar: ${avatarId}`);
+            showNotification('Feature unavailable: Secure VRChat API authentication is required to change avatars, which cannot be done from this simple page.', 8000);
         };
 
-        searchBar.addEventListener('input', filterAvatars);
-
-        // --- Notification ---
-        const showNotification = (message, duration = 5000, isError = false) => {
-            const notification = document.getElementById('notification');
-            if (!notification) return;
-            
-            notification.textContent = message;
-            notification.classList.remove('hidden', 'bg-red-600', 'bg-green-500');
-            notification.classList.add(isError ? 'bg-red-600' : 'bg-green-500');
-
-            setTimeout(() => {
-                notification.classList.add('hidden');
-            }, duration);
-        };
 
         // --- Look Up Avatar ID ---
         const handleLookup = (idFieldId) => {
@@ -332,7 +699,7 @@
                 const url = `https://vrchat.com/home/avatar/${avatarId.trim()}`;
                 window.open(url, '_blank');
             } else {
-                showNotification('Please enter a valid Avatar ID (starting with "avtr_") before looking up.', 5000, true);
+                showNotification('Please enter a valid Avatar ID (starting with "avtr_") before looking up.');
             }
         };
 
@@ -350,32 +717,116 @@
                 avatarId: addAvatarForm.avatarId.value,
                 creatorName: addAvatarForm.creatorName.value,
                 imageUrl: addAvatarForm.imageUrl.value,
+                isPC: true,
+                isQuest: false,
                 notes: addAvatarForm.notes.value,
+                folderId: currentFolderId // null if in root, folderId if in folder
             };
             avatars.push(newAvatar);
             saveAvatarsToStorage(avatars);
-            // After adding, clear search and re-render all avatars
+            
             searchBar.value = '';
-            filterAvatars();
+            renderCurrentView(); // Re-render with filters
             addAvatarForm.reset();
         });
 
-        // --- Delete Avatar ---
+        // --- Import Avatars ---
+        importBtn.addEventListener('click', () => {
+            const importText = importTextarea.value;
+            if (!importText.trim()) {
+                showNotification("Import field is empty.", 4000);
+                return;
+            }
+
+            const lines = importText.split('\n');
+            let avatars = getAvatarsFromStorage();
+            let importedCount = 0;
+            let errorCount = 0;
+
+            let startLine = 0;
+            if (lines.length > 0) {
+                const firstLineLower = lines[0].trim().toLowerCase();
+                if (firstLineLower.startsWith('id,name,author') || firstLineLower.startsWith('id,name,thumbnail,author')) {
+                    startLine = 1; // Skip the header row
+                }
+            }
+
+            for (let i = startLine; i < lines.length; i++) {
+                let line = lines[i].trim();
+                if (!line) continue;
+
+                const parts = line.split(',');
+                // Expected format: ID,Name,Author,ImageURL
+                if (parts.length >= 4) { 
+                    const avatarId = parts[0].trim();
+                    const avatarName = parts[1].trim();
+                    const creatorName = parts[2].trim();
+                    const imageUrl = parts[3].trim();
+                    const isPC = true;
+                    const isQuest = false; // Default to false
+
+                    if (avatarId.startsWith('avtr_') && avatarName) {
+                        const newAvatar = {
+                            id: crypto.randomUUID(),
+                            avatarId: avatarId,
+                            avatarName: avatarName,
+                            creatorName: creatorName || 'Unknown',
+                            imageUrl: imageUrl || '',
+                            isPC: isPC,
+                            isQuest: isQuest,
+                            notes: 'Imported',
+                            folderId: currentFolderId // null if in root, folderId if in folder
+                        };
+                        avatars.push(newAvatar);
+                        importedCount++;
+                    } else {
+                        errorCount++;
+                    }
+                } else {
+                    errorCount++;
+                }
+            }
+
+            saveAvatarsToStorage(avatars);
+            
+            if (importedCount > 0) {
+                showNotification(`Successfully imported ${importedCount} avatars.`, 5000);
+                importTextarea.value = '';
+                searchBar.value = '';
+                renderCurrentView();
+            }
+
+            if (errorCount > 0) {
+                importStatus.textContent = `${errorCount} line(s) failed to import.`;
+                showNotification(`Failed to import ${errorCount} line(s). Check format.`, 5000);
+            } else if (importedCount > 0) {
+                importStatus.textContent = `Imported ${importedCount}!`;
+            } else {
+                importStatus.textContent = 'No valid avatars found to import.';
+            }
+
+            setTimeout(() => {
+                importStatus.textContent = '';
+            }, 5000);
+        });
+
+        // --- Delete Avatar (Single) ---
         const deleteAvatar = (id) => {
             let avatars = getAvatarsFromStorage();
             avatars = avatars.filter(avatar => avatar.id !== id);
             saveAvatarsToStorage(avatars);
-            // After deleting, re-apply the current filter
-            filterAvatars();
+            renderCurrentView();
         };
 
-        // --- Edit Avatar ---
+        // --- Edit Avatar (Modal) ---
         const openEditModal = (avatar) => {
             editAvatarForm.editAvatarIdInput.value = avatar.id;
             editAvatarForm.editAvatarName.value = avatar.avatarName;
             editAvatarForm.editAvatarId.value = avatar.avatarId;
             editAvatarForm.editCreatorName.value = avatar.creatorName;
             editAvatarForm.editImageUrl.value = avatar.imageUrl;
+            editAvatarForm.editIsPC.checked = avatar.isPC || false;
+            editAvatarForm.editIsQuest.checked = avatar.isQuest || false;
             editAvatarForm.editNotes.value = avatar.notes;
             editModal.classList.remove('hidden');
             editModal.classList.add('flex');
@@ -395,40 +846,207 @@
             
             const avatarIndex = avatars.findIndex(avatar => avatar.id === id);
             if (avatarIndex > -1) {
+                // Get folderId from existing avatar to preserve it
+                const existingFolderId = avatars[avatarIndex].folderId; 
                 avatars[avatarIndex] = {
                     id: id,
                     avatarName: editAvatarForm.editAvatarName.value,
                     avatarId: editAvatarForm.editAvatarId.value,
                     creatorName: editAvatarForm.editCreatorName.value,
                     imageUrl: editAvatarForm.editImageUrl.value,
+                    isPC: editAvatarForm.editIsPC.checked,
+                    isQuest: editAvatarForm.editIsQuest.checked,
                     notes: editAvatarForm.editNotes.value,
+                    folderId: existingFolderId // Preserve existing folder
                 };
                 saveAvatarsToStorage(avatars);
-                // After editing, re-apply the current filter
-                filterAvatars();
+                renderCurrentView();
             }
             closeEditModal();
         });
 
-        // Initialize the application on window load
-        window.onload = () => {
-            // --- One-time Migration from Cookie to Local Storage ---
-            const avatarsInStorage = localStorage.getItem(STORAGE_KEY);
-            // Only run migration if local storage is empty, to avoid overwriting newer data
-            if (!avatarsInStorage) { 
-                const avatarsInCookie = getAvatarsFromCookie_forMigration();
-                if (avatarsInCookie && avatarsInCookie.length > 0) {
-                    console.log("Migrating avatar data from cookie to local storage.");
-                    saveAvatarsToStorage(avatarsInCookie);
-                    showNotification("Your avatar log has been upgraded to a more reliable storage format!", 7000);
-                }
+        // --- Mass Edit Functions ---
+        const toggleMassEditMode = () => {
+            isMassEditMode = !isMassEditMode;
+            if (isMassEditMode) {
+                document.body.classList.add('mass-edit-active');
+                massEditBtn.classList.add('hidden');
+                massEditActionBar.classList.remove('hidden');
+                massEditActionBar.classList.add('flex');
+            } else {
+                document.body.classList.remove('mass-edit-active');
+                massEditBtn.classList.remove('hidden');
+                massEditActionBar.classList.add('hidden');
+                massEditActionBar.classList.remove('flex');
             }
+            // Re-render to show/hide checkboxes and buttons
+            renderCurrentView();
+        };
+
+        const getSelectedAvatarIds = () => {
+            const checkboxes = document.querySelectorAll('.mass-edit-checkbox:checked');
+            return Array.from(checkboxes).map(cb => cb.dataset.id);
+        };
+
+        massDeleteBtn.addEventListener('click', () => {
+            const idsToDelete = getSelectedAvatarIds();
+            if (idsToDelete.length === 0) {
+                showNotification("No avatars selected.", 3000);
+                return;
+            }
+
+            let avatars = getAvatarsFromStorage();
+            avatars = avatars.filter(avatar => !idsToDelete.includes(avatar.id));
+            saveAvatarsToStorage(avatars);
             
-            const avatars = getAvatarsFromStorage(); // Load from new, reliable storage
-            renderAvatars(avatars);
+            showNotification(`Deleted ${idsToDelete.length} avatars.`, 3000);
+            renderCurrentView();
+        });
+
+        massMoveBtn.addEventListener('click', () => {
+            const idsToMove = getSelectedAvatarIds();
+            if (idsToMove.length === 0) {
+                showNotification("No avatars selected.", 3000);
+                return;
+            }
+
+            const targetFolderId = moveToFolderSelect.value === 'uncategorized' ? null : moveToFolderSelect.value;
+            
+            let avatars = getAvatarsFromStorage();
+            avatars = avatars.map(avatar => {
+                if (idsToMove.includes(avatar.id)) {
+                    avatar.folderId = targetFolderId;
+                }
+                return avatar;
+            });
+            saveAvatarsToStorage(avatars);
+
+            showNotification(`Moved ${idsToMove.length} avatars.`, 3000);
+            renderCurrentView();
+        });
+
+        // --- New Folder Export Function ---
+        const handleExportFolder = (folderId, folderName) => {
+            const allAvatars = getAvatarsFromStorage();
+            const avatarsToExport = allAvatars.filter(avatar => avatar.folderId === folderId);
+
+            if (avatarsToExport.length === 0) {
+                showNotification("This folder is empty. Nothing to export.", 3000);
+                return;
+            }
+
+            // Format: ID,Name,Author,ImageURL
+            const header = "ID,Name,Author,ImageURL\n";
+            const csvContent = avatarsToExport.map(avatar => {
+                return [
+                    avatar.avatarId || '',
+                    avatar.avatarName || 'Unnamed',
+                    avatar.creatorName || 'Unknown',
+                    avatar.imageUrl || ''
+                ].join(',');
+            }).join('\n');
+            
+            const fullExportData = header + csvContent;
+
+            // Create and trigger download
+            const blob = new Blob([fullExportData], { type: 'text/plain;charset=utf-8;' });
+            const link = document.createElement("a");
+            
+            // Sanitize folder name for filename
+            const safeFolderName = (folderName || 'folder').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", `vrchat_avatars_${safeFolderName}.txt`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                showNotification(`Exported ${avatarsToExport.length} avatars from "${folderName}".`, 3000);
+            } else {
+                showNotification("Export failed: Your browser does not support this feature.", 5000);
+            }
+        };
+
+        // --- New Mass Export Function ---
+        const handleMassExport = () => {
+            const idsToExport = getSelectedAvatarIds();
+            if (idsToExport.length === 0) {
+                showNotification("No avatars selected to export.", 3000);
+                return;
+            }
+
+            const allAvatars = getAvatarsFromStorage();
+            const avatarsToExport = allAvatars.filter(avatar => idsToExport.includes(avatar.id));
+            
+            // Format: ID,Name,Author,ImageURL
+            const header = "ID,Name,Author,ImageURL\n";
+            const csvContent = avatarsToExport.map(avatar => {
+                // This format matches the import parser
+                return [
+                    avatar.avatarId || '',
+                    avatar.avatarName || 'Unnamed',
+                    avatar.creatorName || 'Unknown',
+                    avatar.imageUrl || ''
+                ].join(',');
+            }).join('\n');
+            
+            const fullExportData = header + csvContent;
+
+            // Create and trigger download
+            const blob = new Blob([fullExportData], { type: 'text/plain;charset=utf-8;' });
+            const link = document.createElement("a");
+            
+            if (link.download !== undefined) { // Check for browser support
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", "vrchat_avatars_export.txt");
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                showNotification(`Exported ${idsToExport.length} avatars.`, 3000);
+            } else {
+                showNotification("Export failed: Your browser does not support this feature.", 5000);
+            }
+        };
+
+        massEditBtn.addEventListener('click', toggleMassEditMode);
+        cancelMassEditBtn.addEventListener('click', toggleMassEditMode);
+        massExportBtn.addEventListener('click', handleMassExport); // Wire up the new button
+
+        // --- Initialize ---
+        window.onload = () => {
+            // 1. Migrate avatar data for folders
+            let avatars = getAvatarsFromStorage();
+            let needsSave = false;
+            avatars = avatars.map(avatar => {
+                if (avatar.folderId === undefined) {
+                    needsSave = true;
+                    return { ...avatar, folderId: null };
+                }
+                return avatar;
+            });
+            if (needsSave) {
+                console.log("Migrating avatars to include folderId property...");
+                saveAvatarsToStorage(avatars);
+            }
+
+            // 2. Render UI
+            renderFolderOptions(); // Populates the 'move to' dropdown
+            renderCurrentView(); // Renders the initial root view
         };
 
     </script>
 </body>
 </html>
+
+
+
+
+
+
 
