@@ -40,7 +40,7 @@
         }
         .btn-secondary {
             background-color: #6b6d85; /* Greyish Violet */
-            transition: background-color: 0.3s;
+            transition: background-color 0.3s;
         }
         .btn-secondary:hover {
              background-color: #5a5c72;
@@ -121,6 +121,11 @@
     <div id="app-container">
         <div class="container mx-auto p-4 md:p-8">
             <header class="text-center mb-8 relative">
+                <div class="absolute -left-4 md:-left-8 top-0 flex gap-2">
+                    <button id="export-all-btn" class="btn-primary text-white font-bold py-1.5 px-3 rounded-md shadow-md text-sm">Export All</button>
+                    <button id="import-all-btn" class="btn-secondary text-white font-bold py-1.5 px-3 rounded-md shadow-md text-sm">Import All</button>
+                    <input id="import-file-input" type="file" accept=".txt,.json" class="hidden" />
+                </div>
                 <h1 class="text-4xl md:text-5xl font-bold text-white mb-2 flex items-center justify-center space-x-2">
                     <span>🐰</span>
                     <span>VRChat Avatar Log</span>
@@ -316,6 +321,9 @@
         const massDeleteBtn = document.getElementById('mass-delete-btn');
         const cancelMassEditBtn = document.getElementById('cancel-mass-edit-btn');
         const massExportBtn = document.getElementById('mass-export-btn'); // New Export Button
+        const exportAllBtn = document.getElementById('export-all-btn');
+        const importAllBtn = document.getElementById('import-all-btn');
+        const importFileInput = document.getElementById('import-file-input');
         
         // --- New Navigation Elements ---
         const currentViewTitle = document.getElementById('current-view-title');
@@ -339,6 +347,130 @@
             setTimeout(() => {
                 notification.classList.add('hidden');
             }, duration);
+        };
+
+        // --- Text Escaping Helpers ---
+        const ensureString = (value) => (value === undefined || value === null) ? '' : String(value);
+        const escapeHTML = (value) => {
+            const text = ensureString(value);
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+        const csvEscape = (value) => {
+            const text = ensureString(value);
+            const needsQuoting = /[",\n]/.test(text);
+            const escaped = text.replace(/"/g, '""');
+            return needsQuoting ? `"${escaped}"` : escaped;
+        };
+
+        // --- Import/Export helpers ---
+        const tryParseJson = (text) => { try { return JSON.parse(text); } catch { return null; } };
+        const isValidImportedPayload = (obj) => {
+            if (!obj || typeof obj !== 'object') return false;
+            return Array.isArray(obj.folders) && Array.isArray(obj.avatars);
+        };
+        const normalizeFolders = (folders) => {
+            if (!Array.isArray(folders)) return [];
+            return folders
+                .filter(f => f && (f.id || f.name))
+                .map(f => ({ id: ensureString(f.id) || crypto.randomUUID(), name: ensureString(f.name || 'Folder') }));
+        };
+        const normalizeAvatars = (avatars) => {
+            if (!Array.isArray(avatars)) return [];
+            return avatars
+                .filter(a => a && (a.avatarId || a.avatarName))
+                .map(a => ({
+                    id: ensureString(a.id) || crypto.randomUUID(),
+                    avatarName: ensureString(a.avatarName || 'Unnamed'),
+                    avatarId: ensureString(a.avatarId || ''),
+                    creatorName: ensureString(a.creatorName || ''),
+                    imageUrl: ensureString(a.imageUrl || ''),
+                    isPC: !!(a.isPC !== undefined ? a.isPC : true),
+                    isQuest: !!(a.isQuest !== undefined ? a.isQuest : false),
+                    notes: ensureString(a.notes || ''),
+                    folderId: (a.folderId === null || a.folderId === undefined) ? null : ensureString(a.folderId)
+                }));
+        };
+        const mergeFoldersByName = (existingFolders, incomingFolders) => {
+            const nameToExisting = new Map(existingFolders.map(f => [f.name.toLowerCase(), f]));
+            const idRemap = new Map(); // incomingId -> finalId
+            const merged = existingFolders.slice();
+            for (const inf of incomingFolders) {
+                const key = inf.name.toLowerCase();
+                if (nameToExisting.has(key)) {
+                    const existing = nameToExisting.get(key);
+                    idRemap.set(inf.id, existing.id);
+                } else {
+                    const idInUse = merged.some(f => f.id === inf.id);
+                    const finalId = idInUse ? crypto.randomUUID() : inf.id;
+                    const nf = { id: finalId, name: inf.name };
+                    merged.push(nf);
+                    nameToExisting.set(key, nf);
+                    idRemap.set(inf.id, finalId);
+                }
+            }
+            return { merged, idRemap };
+        };
+        const dedupeAvatars = (existingAvatars, incomingAvatars, folderIdMap) => {
+            const result = existingAvatars.slice();
+            const keyOf = (a) => (a.avatarId && a.avatarId.startsWith('avtr_'))
+                ? `id:${a.avatarId}`
+                : `name:${a.avatarName.toLowerCase()}|by:${(a.creatorName||'').toLowerCase()}`;
+            const have = new Set(result.map(keyOf));
+            for (const a of incomingAvatars) {
+                const key = keyOf(a);
+                if (have.has(key)) continue; // keep existing, don't override
+                const mappedFolderId = (a.folderId == null) ? null : (folderIdMap.get(a.folderId) || null);
+                let finalId = a.id;
+                if (result.some(x => x.id === finalId)) finalId = crypto.randomUUID();
+                result.push({ ...a, id: finalId, folderId: mappedFolderId });
+                have.add(key);
+            }
+            return result;
+        };
+        const exportAllData = () => {
+            try {
+                const folders = getFoldersFromStorage();
+                const avatars = getAvatarsFromStorage();
+                const payload = { version: 1, exportedAt: new Date().toISOString(), folders, avatars };
+                const json = JSON.stringify(payload, null, 2);
+                const blob = new Blob(['\ufeff' + json], { type: 'text/plain;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', 'vrchat_avatar_log_export.txt');
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                showNotification('Exported all folders and avatars.', 3000);
+            } catch (e) {
+                console.error('Export failed:', e);
+                showNotification('Export failed.', 5000);
+            }
+        };
+        const importAllDataFromText = (text) => {
+            const obj = tryParseJson(text);
+            if (!isValidImportedPayload(obj)) {
+                showNotification('Invalid import file format.', 5000);
+                return;
+            }
+            const existingFolders = getFoldersFromStorage();
+            const existingAvatars = getAvatarsFromStorage();
+            const normalizedFolders = normalizeFolders(obj.folders);
+            const normalizedAvatars = normalizeAvatars(obj.avatars);
+            const { merged: mergedFolders, idRemap } = mergeFoldersByName(existingFolders, normalizedFolders);
+            const mergedAvatars = dedupeAvatars(existingAvatars, normalizedAvatars, idRemap);
+            saveFoldersToStorage(mergedFolders);
+            saveAvatarsToStorage(mergedAvatars);
+            renderFolderOptions();
+            renderCurrentView();
+            showNotification(`Imported ${normalizedAvatars.length} avatars and ${normalizedFolders.length} folders. Existing items preserved.`, 6000);
         };
 
         // --- Storage Functions (Folders) ---
@@ -437,7 +569,7 @@
             `; // 'Move to All' doesn't make sense
 
             folders.forEach(folder => {
-                const optionHTML = `<option value="${folder.id}">${folder.name}</option>`;
+                const optionHTML = `<option value="${folder.id}">${escapeHTML(folder.name)}</option>`;
                 moveToFolderSelect.innerHTML += optionHTML;
             });
         };
@@ -491,8 +623,8 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 mb-4 text-purple-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                     </svg>
-                    <h3 class="text-xl font-bold text-white">${folder.name}</h3>
-                    <p class="text-sm text-gray-300 mb-1">${avatarCount} avatar(s)</p>
+                    <h3 class="text-xl font-bold text-white">${escapeHTML(folder.name)}</h3>
+                    <p class="text-sm text-gray-300 mb-1">${escapeHTML(avatarCount)}</p>
                 </div>
                 <div class="mt-auto flex justify-end gap-2">
                     <button class="export-folder-btn btn-secondary text-white text-sm font-bold py-1 px-3 rounded-md" data-id="${folder.id}">Export</button>
@@ -530,14 +662,14 @@
                 <input type="checkbox" class="mass-edit-checkbox absolute top-2 right-2 w-6 h-6 z-10" data-id="${avatar.id}">
 
                 <img src="${avatar.imageUrl || 'https://placehold.co/600x400/162447/e0e0e0?text=No+Image'}" 
-                     alt="${avatar.avatarName}" 
+                     alt="${escapeHTML(avatar.avatarName)}" 
                      onerror="this.onerror=null;this.src='https://placehold.co/600x400/162447/e0e0e0?text=Invalid+Image';"
                      class="w-full h-48 object-cover rounded-md mb-4">
-                <h3 class="text-xl font-bold text-white">${avatar.avatarName}</h3>
-                <p class="text-sm text-gray-300 mb-1">by ${avatar.creatorName || 'Unknown'}</p>
-                <p class="text-xs text-gray-400 font-mono mb-3 break-all">${avatar.avatarId}</p>
+                <h3 class="text-xl font-bold text-white">${escapeHTML(avatar.avatarName)}</h3>
+                <p class="text-sm text-gray-300 mb-1">by ${escapeHTML(avatar.creatorName || 'Unknown')}</p>
+                <p class="text-xs text-gray-400 font-mono mb-3 break-all">${escapeHTML(avatar.avatarId)}</p>
                 
-                <p class="text-gray-300 text-sm mb-4 flex-grow">${avatar.notes || 'No notes.'}</p>
+                <p class="text-gray-300 text-sm mb-4 flex-grow">${escapeHTML(avatar.notes || 'No notes.')}</p>
                 
                 <!-- Individual Card Buttons -->
                 <div class="card-buttons mt-auto flex justify-end gap-2">
@@ -928,7 +1060,7 @@
         // --- New Folder Export Function ---
         const handleExportFolder = (folderId, folderName) => {
             const allAvatars = getAvatarsFromStorage();
-            const avatarsToExport = allAvatars.filter(avatar => avatar.folderId === folderId);
+                const avatarsToExport = allAvatars.filter(avatar => avatar.folderId === folderId);
 
             if (avatarsToExport.length === 0) {
                 showNotification("This folder is empty. Nothing to export.", 3000);
@@ -939,14 +1071,14 @@
             const header = "ID,Name,Author,ImageURL\n";
             const csvContent = avatarsToExport.map(avatar => {
                 return [
-                    avatar.avatarId || '',
-                    avatar.avatarName || 'Unnamed',
-                    avatar.creatorName || 'Unknown',
-                    avatar.imageUrl || ''
+                    csvEscape(avatar.avatarId || ''),
+                    csvEscape(avatar.avatarName || 'Unnamed'),
+                    csvEscape(avatar.creatorName || 'Unknown'),
+                    csvEscape(avatar.imageUrl || '')
                 ].join(',');
             }).join('\n');
             
-            const fullExportData = header + csvContent;
+            const fullExportData = '\ufeff' + header + csvContent; // add BOM for Excel/Windows
 
             // Create and trigger download
             const blob = new Blob([fullExportData], { type: 'text/plain;charset=utf-8;' });
@@ -984,16 +1116,16 @@
             // Format: ID,Name,Author,ImageURL
             const header = "ID,Name,Author,ImageURL\n";
             const csvContent = avatarsToExport.map(avatar => {
-                // This format matches the import parser
+                // This format matches the import parser (with quotes/escaping)
                 return [
-                    avatar.avatarId || '',
-                    avatar.avatarName || 'Unnamed',
-                    avatar.creatorName || 'Unknown',
-                    avatar.imageUrl || ''
+                    csvEscape(avatar.avatarId || ''),
+                    csvEscape(avatar.avatarName || 'Unnamed'),
+                    csvEscape(avatar.creatorName || 'Unknown'),
+                    csvEscape(avatar.imageUrl || '')
                 ].join(',');
             }).join('\n');
             
-            const fullExportData = header + csvContent;
+            const fullExportData = '\ufeff' + header + csvContent; // add BOM for Excel/Windows
 
             // Create and trigger download
             const blob = new Blob([fullExportData], { type: 'text/plain;charset=utf-8;' });
@@ -1017,6 +1149,24 @@
         massEditBtn.addEventListener('click', toggleMassEditMode);
         cancelMassEditBtn.addEventListener('click', toggleMassEditMode);
         massExportBtn.addEventListener('click', handleMassExport); // Wire up the new button
+        // Global Import/Export wiring
+        exportAllBtn.addEventListener('click', exportAllData);
+        importAllBtn.addEventListener('click', () => importFileInput.click());
+        importFileInput.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const text = evt.target && evt.target.result ? String(evt.target.result) : '';
+                importAllDataFromText(text);
+                importFileInput.value = '';
+            };
+            reader.onerror = () => {
+                showNotification('Failed to read the selected file.', 5000);
+                importFileInput.value = '';
+            };
+            reader.readAsText(file, 'utf-8');
+        });
 
         // --- Initialize ---
         window.onload = () => {
