@@ -287,6 +287,17 @@
                     </select>
                     <button id="mass-move-btn" class="btn-primary text-white font-bold py-2 px-3 rounded-md shadow-md text-sm">Move</button>
                 </div>
+                <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-2 text-gray-300 text-sm">
+                        <input type="checkbox" id="mass-set-pc" class="form-checkbox text-purple-600">
+                        <span>PC</span>
+                    </label>
+                    <label class="flex items-center gap-2 text-gray-300 text-sm">
+                        <input type="checkbox" id="mass-set-quest" class="form-checkbox text-purple-600">
+                        <span>Quest</span>
+                    </label>
+                    <button id="mass-apply-platform-btn" class="btn-primary text-white font-bold py-2 px-3 rounded-md shadow-md text-sm">Apply</button>
+                </div>
                 <div class="flex items-center gap-4">
                     <label class="flex items-center gap-2 text-gray-300 text-sm">
                         <input id="mass-select-all" type="checkbox" class="mass-edit-checkbox" style="display: inline-block; width: 1rem; height: 1rem;">
@@ -326,6 +337,9 @@
         const cancelMassEditBtn = document.getElementById('cancel-mass-edit-btn');
         const massExportBtn = document.getElementById('mass-export-btn'); // New Export Button
         const massSelectAll = document.getElementById('mass-select-all');
+        const massSetPC = document.getElementById('mass-set-pc');
+        const massSetQuest = document.getElementById('mass-set-quest');
+        const massApplyPlatformBtn = document.getElementById('mass-apply-platform-btn');
         const exportAllBtn = document.getElementById('export-all-btn');
         const importAllBtn = document.getElementById('import-all-btn');
         const importFileInput = document.getElementById('import-file-input');
@@ -395,7 +409,7 @@
                     creatorName: ensureString(a.creatorName || ''),
                     imageUrl: ensureString(a.imageUrl || ''),
                     isPC: !!(a.isPC !== undefined ? a.isPC : true),
-                    isQuest: !!(a.isQuest !== undefined ? a.isQuest : false),
+                    isQuest: !!(a.isQuest !== undefined ? a.isQuest : true),
                     notes: ensureString(a.notes || ''),
                     folderId: (a.folderId === null || a.folderId === undefined) ? null : ensureString(a.folderId)
                 }));
@@ -905,7 +919,7 @@
                     const creatorName = parts[2].trim();
                     const imageUrl = parts[3].trim();
                     const isPC = true;
-                    const isQuest = false; // Default to false
+                    const isQuest = true; // Default to true
 
                     if (avatarId.startsWith('avtr_') && avatarName) {
                         const newAvatar = {
@@ -1079,6 +1093,36 @@
             saveAvatarsToStorage(avatars);
 
             showNotification(`Moved ${idsToMove.length} avatars.`, 3000);
+            renderCurrentView();
+        });
+
+        massApplyPlatformBtn.addEventListener('click', () => {
+            const idsToUpdate = getSelectedAvatarIds();
+            if (idsToUpdate.length === 0) {
+                showNotification("No avatars selected.", 3000);
+                return;
+            }
+
+            const setPC = massSetPC.checked;
+            const setQuest = massSetQuest.checked;
+            
+            // If neither checkbox is checked, don't apply changes
+            if (!setPC && !setQuest) {
+                showNotification("Please select at least one platform (PC or Quest).", 3000);
+                return;
+            }
+
+            let avatars = getAvatarsFromStorage();
+            avatars = avatars.map(avatar => {
+                if (idsToUpdate.includes(avatar.id)) {
+                    avatar.isPC = setPC;
+                    avatar.isQuest = setQuest;
+                }
+                return avatar;
+            });
+            saveAvatarsToStorage(avatars);
+
+            showNotification(`Updated ${idsToUpdate.length} avatar(s) platform compatibility.`, 3000);
             renderCurrentView();
         });
 
