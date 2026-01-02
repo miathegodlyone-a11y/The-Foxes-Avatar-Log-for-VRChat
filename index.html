@@ -213,9 +213,11 @@
 
                 <!-- Search Bar -->
                 
-                <!-- Mass Edit Button -->
-                <div>
+                <!-- Mass Edit Button and Utilities -->
+                <div class="flex gap-2">
                     <button id="mass-edit-btn" class="btn-secondary text-white font-bold py-2 px-4 rounded-md shadow-md w-full md:w-auto">Mass Edit</button>
+                    <button id="remove-duplicates-btn" class="btn-secondary text-white font-bold py-2 px-4 rounded-md shadow-md w-full md:w-auto">Remove Duplicates</button>
+                    <button id="undo-btn" class="btn-secondary text-white font-bold py-2 px-4 rounded-md shadow-md w-full md:w-auto disabled:opacity-50 disabled:cursor-not-allowed" disabled>Undo</button>
                 </div>
             </div>
 
@@ -336,6 +338,7 @@
         const massDeleteBtn = document.getElementById('mass-delete-btn');
         const cancelMassEditBtn = document.getElementById('cancel-mass-edit-btn');
         const massExportBtn = document.getElementById('mass-export-btn'); // New Export Button
+        const removeDuplicatesBtn = document.getElementById('remove-duplicates-btn');
         const massSelectAll = document.getElementById('mass-select-all');
         const massSetPC = document.getElementById('mass-set-pc');
         const massSetQuest = document.getElementById('mass-set-quest');
@@ -343,6 +346,7 @@
         const exportAllBtn = document.getElementById('export-all-btn');
         const importAllBtn = document.getElementById('import-all-btn');
         const importFileInput = document.getElementById('import-file-input');
+        const undoBtn = document.getElementById('undo-btn');
         
         // --- New Navigation Elements ---
         const currentViewTitle = document.getElementById('current-view-title');
@@ -352,6 +356,8 @@
         const STORAGE_KEY = 'vrchatAvatarLog';
         const STORAGE_KEY_FOLDERS = 'vrchatAvatarFolders';
         const COOKIE_NAME = 'vrchatAvatarLog'; // For migration
+        const STORAGE_KEY_UNDO = 'vrchatAvatarLogUndo';
+        const STORAGE_KEY_FOLDERS_UNDO = 'vrchatAvatarFoldersUndo';
 
         // --- App State ---
         let isMassEditMode = false;
@@ -367,6 +373,94 @@
                 notification.classList.add('hidden');
             }, duration);
         };
+
+        // --- Undo System ---
+        const saveUndoState = () => {
+            try {
+                const avatars = getAvatarsFromStorage();
+                const folders = getFoldersFromStorage();
+                localStorage.setItem(STORAGE_KEY_UNDO, JSON.stringify(avatars));
+                localStorage.setItem(STORAGE_KEY_FOLDERS_UNDO, JSON.stringify(folders));
+                updateUndoButtonState();
+            } catch (e) {
+                console.error("Error saving undo state:", e);
+            }
+        };
+
+        const hasUndoState = () => {
+            try {
+                const avatarsUndo = localStorage.getItem(STORAGE_KEY_UNDO);
+                const foldersUndo = localStorage.getItem(STORAGE_KEY_FOLDERS_UNDO);
+                return avatarsUndo !== null && foldersUndo !== null;
+            } catch (e) {
+                return false;
+            }
+        };
+
+        const restoreUndoState = () => {
+            try {
+                const avatarsUndo = localStorage.getItem(STORAGE_KEY_UNDO);
+                const foldersUndo = localStorage.getItem(STORAGE_KEY_FOLDERS_UNDO);
+                
+                if (!avatarsUndo || !foldersUndo) {
+                    showNotification("No undo state available.", 3000);
+                    return false;
+                }
+
+                const avatars = JSON.parse(avatarsUndo);
+                const folders = JSON.parse(foldersUndo);
+
+                // Validate the data before restoring
+                if (!Array.isArray(avatars) || !Array.isArray(folders)) {
+                    showNotification("Error: Invalid undo state data.", 5000);
+                    return false;
+                }
+
+                // Restore the state
+                saveAvatarsToStorage(avatars);
+                saveFoldersToStorage(folders);
+
+                // Clear undo state after restoring
+                localStorage.removeItem(STORAGE_KEY_UNDO);
+                localStorage.removeItem(STORAGE_KEY_FOLDERS_UNDO);
+                updateUndoButtonState();
+
+                // Re-render the view
+                renderFolderOptions();
+                renderCurrentView();
+                
+                showNotification("Changes undone successfully.", 3000);
+                return true;
+            } catch (e) {
+                console.error("Error restoring undo state:", e);
+                showNotification("Error: Failed to restore undo state.", 5000);
+                return false;
+            }
+        };
+
+        const updateUndoButtonState = () => {
+            if (undoBtn) {
+                if (hasUndoState()) {
+                    undoBtn.disabled = false;
+                    undoBtn.classList.remove('disabled:opacity-50', 'disabled:cursor-not-allowed');
+                } else {
+                    undoBtn.disabled = true;
+                    undoBtn.classList.add('disabled:opacity-50', 'disabled:cursor-not-allowed');
+                }
+            }
+        };
+
+        if (undoBtn) {
+            undoBtn.addEventListener('click', () => {
+                if (hasUndoState()) {
+                    if (confirm("Are you sure you want to undo the last operation? This will restore the previous state.")) {
+                        restoreUndoState();
+                    }
+                } else {
+                    showNotification("No undo state available.", 3000);
+                }
+            });
+        }
 
         // --- Text Escaping Helpers ---
         const ensureString = (value) => (value === undefined || value === null) ? '' : String(value);
@@ -485,11 +579,28 @@
             const normalizedAvatars = normalizeAvatars(obj.avatars);
             const { merged: mergedFolders, idRemap } = mergeFoldersByName(existingFolders, normalizedFolders);
             const mergedAvatars = dedupeAvatars(existingAvatars, normalizedAvatars, idRemap);
+            
+            // Calculate how many were actually added (not duplicates)
+            const actuallyAdded = mergedAvatars.length - existingAvatars.length;
+            const duplicateCount = normalizedAvatars.length - actuallyAdded;
+            
             saveFoldersToStorage(mergedFolders);
             saveAvatarsToStorage(mergedAvatars);
             renderFolderOptions();
             renderCurrentView();
-            showNotification(`Imported ${normalizedAvatars.length} avatars and ${normalizedFolders.length} folders. Existing items preserved.`, 6000);
+            
+            let message = '';
+            if (actuallyAdded > 0) {
+                message = `Imported ${actuallyAdded} new avatar(s) and ${normalizedFolders.length} folder(s).`;
+                if (duplicateCount > 0) {
+                    message += ` ${duplicateCount} duplicate(s) skipped.`;
+                }
+            } else if (duplicateCount > 0) {
+                message = `No new avatars imported. ${duplicateCount} duplicate(s) found and skipped.`;
+            } else {
+                message = `Imported ${normalizedFolders.length} folder(s). No new avatars to import.`;
+            }
+            showNotification(message, 6000);
         };
 
         // --- Storage Functions (Folders) ---
@@ -719,9 +830,7 @@
             
             const handleSelect = (e) => {
                 e.stopPropagation();
-                // selectAvatar(avatar.avatarId); // Old placeholder
-                
-                // New: Open VRCX link directly
+                // Open VRCX link directly
                 if (avatar.avatarId && avatar.avatarId.trim().startsWith('avtr_')) {
                     const url = `vrcx://switchavatar/${avatar.avatarId.trim()}`;
                     window.location.href = url;
@@ -744,7 +853,7 @@
                     return;
                 }
                 if (avatar.avatarId && avatar.avatarId.trim().startsWith('avtr_')) {
-                    const url = `vrcx://switchavatar/${avatar.avatarId.trim()}`; // Updated format
+                    const url = `vrcx://switchavatar/${avatar.avatarId.trim()}`;
                     window.location.href = url;
                 }
             });
@@ -898,6 +1007,10 @@
             let avatars = getAvatarsFromStorage();
             let importedCount = 0;
             let errorCount = 0;
+            let duplicateCount = 0;
+
+            // Create a Set of existing avatarIds for quick duplicate checking
+            const existingAvatarIds = new Set(avatars.map(a => a.avatarId && a.avatarId.trim()).filter(Boolean));
 
             let startLine = 0;
             if (lines.length > 0) {
@@ -922,6 +1035,12 @@
                     const isQuest = true; // Default to true
 
                     if (avatarId.startsWith('avtr_') && avatarName) {
+                        // Check for duplicate avatarId
+                        if (existingAvatarIds.has(avatarId)) {
+                            duplicateCount++;
+                            continue; // Skip this duplicate
+                        }
+
                         const newAvatar = {
                             id: crypto.randomUUID(),
                             avatarId: avatarId,
@@ -934,6 +1053,7 @@
                             folderId: currentFolderId // null if in root, folderId if in folder
                         };
                         avatars.push(newAvatar);
+                        existingAvatarIds.add(avatarId); // Track newly added avatarId to prevent duplicates within the same import
                         importedCount++;
                     } else {
                         errorCount++;
@@ -945,18 +1065,36 @@
 
             saveAvatarsToStorage(avatars);
             
+            // Build status message
+            let statusMessage = '';
             if (importedCount > 0) {
-                showNotification(`Successfully imported ${importedCount} avatars.`, 5000);
+                statusMessage = `Successfully imported ${importedCount} avatar(s).`;
+                if (duplicateCount > 0) {
+                    statusMessage += ` ${duplicateCount} duplicate(s) skipped.`;
+                }
+                showNotification(statusMessage, 5000);
                 importTextarea.value = '';
                 searchBar.value = '';
                 renderCurrentView();
+            } else if (duplicateCount > 0) {
+                showNotification(`No new avatars imported. ${duplicateCount} duplicate(s) found and skipped.`, 5000);
             }
 
             if (errorCount > 0) {
                 importStatus.textContent = `${errorCount} line(s) failed to import.`;
-                showNotification(`Failed to import ${errorCount} line(s). Check format.`, 5000);
+                if (duplicateCount > 0) {
+                    importStatus.textContent += ` ${duplicateCount} duplicate(s) skipped.`;
+                }
+                if (importedCount === 0 && duplicateCount === 0) {
+                    showNotification(`Failed to import ${errorCount} line(s). Check format.`, 5000);
+                }
             } else if (importedCount > 0) {
                 importStatus.textContent = `Imported ${importedCount}!`;
+                if (duplicateCount > 0) {
+                    importStatus.textContent += ` (${duplicateCount} duplicate(s) skipped)`;
+                }
+            } else if (duplicateCount > 0) {
+                importStatus.textContent = `${duplicateCount} duplicate(s) skipped.`;
             } else {
                 importStatus.textContent = 'No valid avatars found to import.';
             }
@@ -968,6 +1106,9 @@
 
         // --- Delete Avatar (Single) ---
         const deleteAvatar = (id) => {
+            // Save undo state before deletion
+            saveUndoState();
+            
             let avatars = getAvatarsFromStorage();
             avatars = avatars.filter(avatar => avatar.id !== id);
             saveAvatarsToStorage(avatars);
@@ -1066,6 +1207,9 @@
                 return;
             }
 
+            // Save undo state before deletion
+            saveUndoState();
+
             let avatars = getAvatarsFromStorage();
             avatars = avatars.filter(avatar => !idsToDelete.includes(avatar.id));
             saveAvatarsToStorage(avatars);
@@ -1080,6 +1224,9 @@
                 showNotification("No avatars selected.", 3000);
                 return;
             }
+
+            // Save undo state before moving
+            saveUndoState();
 
             const targetFolderId = moveToFolderSelect.value === 'uncategorized' ? null : moveToFolderSelect.value;
             
@@ -1112,6 +1259,9 @@
                 return;
             }
 
+            // Save undo state before applying platform changes
+            saveUndoState();
+
             let avatars = getAvatarsFromStorage();
             avatars = avatars.map(avatar => {
                 if (idsToUpdate.includes(avatar.id)) {
@@ -1125,6 +1275,115 @@
             showNotification(`Updated ${idsToUpdate.length} avatar(s) platform compatibility.`, 3000);
             renderCurrentView();
         });
+
+        // --- Remove Duplicate Avatars ---
+        const removeDuplicateAvatars = () => {
+            const allAvatars = getAvatarsFromStorage();
+            
+            // Failsafe 1: Validate we have avatars
+            if (!Array.isArray(allAvatars) || allAvatars.length === 0) {
+                showNotification("No avatars found to check for duplicates.", 3000);
+                return;
+            }
+
+            // Group avatars by exact avatarId (case-sensitive, trimmed)
+            const avatarIdMap = new Map();
+            const validAvatars = allAvatars.filter(avatar => {
+                // Failsafe 2: Only process avatars with valid, non-empty avatarIds
+                return avatar && avatar.avatarId && typeof avatar.avatarId === 'string' && avatar.avatarId.trim().length > 0;
+            });
+
+            validAvatars.forEach(avatar => {
+                const normalizedId = avatar.avatarId.trim();
+                if (!avatarIdMap.has(normalizedId)) {
+                    avatarIdMap.set(normalizedId, []);
+                }
+                avatarIdMap.get(normalizedId).push(avatar);
+            });
+
+            // Find duplicates (groups with 2+ avatars)
+            const duplicates = [];
+            avatarIdMap.forEach((avatars, avatarId) => {
+                if (avatars.length >= 2) {
+                    duplicates.push({ avatarId, avatars });
+                }
+            });
+
+            // Failsafe 3: Check if there are any duplicates
+            if (duplicates.length === 0) {
+                showNotification("No duplicate avatars found. All avatar IDs are unique.", 3000);
+                return;
+            }
+
+            // Save undo state before making changes
+            saveUndoState();
+
+            // Failsafe 4: Show confirmation with details
+            const totalDuplicates = duplicates.reduce((sum, dup) => sum + dup.avatars.length - 1, 0);
+            const duplicateDetails = duplicates.map(dup => 
+                `"${dup.avatarId}": ${dup.avatars.length} copies (keeping 1, removing ${dup.avatars.length - 1})`
+            ).join('\n');
+
+            const confirmMessage = `Found ${duplicates.length} duplicate avatar ID(s).\n\n${duplicateDetails}\n\nTotal avatars to remove: ${totalDuplicates}\n\nProceed with removal?`;
+            
+            if (!confirm(confirmMessage)) {
+                // Clear undo state if user cancels
+                localStorage.removeItem(STORAGE_KEY_UNDO);
+                localStorage.removeItem(STORAGE_KEY_FOLDERS_UNDO);
+                updateUndoButtonState();
+                return;
+            }
+
+            // Remove duplicates, keeping the first occurrence of each ID
+            // Strategy: Keep the first one we encounter, remove all others
+            const idsToRemove = new Set();
+            const seenIds = new Set();
+
+            duplicates.forEach(({ avatarId, avatars }) => {
+                // Keep the first avatar, mark others for removal
+                let firstKept = false;
+                avatars.forEach(avatar => {
+                    if (!firstKept) {
+                        // Keep the first one
+                        firstKept = true;
+                    } else {
+                        // Mark subsequent ones for removal
+                        idsToRemove.add(avatar.id);
+                    }
+                });
+            });
+
+            // Failsafe 5: Validate we're not removing all avatars
+            if (idsToRemove.size >= allAvatars.length) {
+                showNotification("Error: Would remove all avatars. Aborting for safety.", 5000);
+                return;
+            }
+
+            // Failsafe 6: Double-check that we have valid IDs to remove
+            const idsToRemoveArray = Array.from(idsToRemove).filter(id => id && typeof id === 'string');
+            if (idsToRemoveArray.length === 0) {
+                showNotification("Error: No valid avatar IDs to remove. Aborting.", 5000);
+                return;
+            }
+
+            // Remove duplicates
+            const remainingAvatars = allAvatars.filter(avatar => !idsToRemove.has(avatar.id));
+
+            // Failsafe 7: Verify we still have avatars after removal
+            if (remainingAvatars.length === 0) {
+                showNotification("Error: Would remove all avatars. Aborting for safety.", 5000);
+                return;
+            }
+
+            // Save the cleaned list
+            saveAvatarsToStorage(remainingAvatars);
+            renderCurrentView();
+            showNotification(`Removed ${idsToRemoveArray.length} duplicate avatar(s). Kept ${remainingAvatars.length} unique avatar(s).`, 5000);
+        };
+
+        if (removeDuplicatesBtn) {
+            removeDuplicatesBtn.addEventListener('click', removeDuplicateAvatars);
+        }
 
         // --- New Folder Export Function ---
         const handleExportFolder = (folderId, folderName) => {
@@ -1257,6 +1516,7 @@
             // 2. Render UI
             renderFolderOptions(); // Populates the 'move to' dropdown
             renderCurrentView(); // Renders the initial root view
+            updateUndoButtonState(); // Update undo button state on load
         };
 
     </script>
